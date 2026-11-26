@@ -337,14 +337,28 @@ test("the reader scrolls in one place with no scrollbar; the page rail and W/A/S
   await page.keyboard.press("w");
   expect(await top()).toBeLessThan(after);
 
-  // The current page number is orange; the others take the rail's ink colour.
-  const colours = await rail.evaluate((nav) => ({
-    rail: getComputedStyle(nav).color,
-    current: getComputedStyle(nav.querySelector('[aria-current="page"]')!).color,
-    other: getComputedStyle(nav.querySelector('button:not([aria-current])')!).color,
-  }));
-  expect(colours.other).toBe(colours.rail);
-  expect(colours.current).not.toBe(colours.rail);
+  // The rail is the interface's own paper; numbers are ink, the current one is the interface orange.
+  const colours = await rail.evaluate((nav) => {
+    const probe = (prop: string) => {
+      const el = document.createElement("span");
+      el.style.color = `var(${prop})`;
+      document.body.appendChild(el);
+      const c = getComputedStyle(el).color;
+      el.remove();
+      return c;
+    };
+    return {
+      railBg: getComputedStyle(nav).backgroundColor,
+      bodyBg: getComputedStyle(document.body).backgroundColor,
+      other: getComputedStyle(nav.querySelector("button:not([aria-current])")!).color,
+      current: getComputedStyle(nav.querySelector('[aria-current="page"]')!).color,
+      ink: probe("--fg"),
+      accent: probe("--accent"),
+    };
+  });
+  expect(colours.railBg).toBe(colours.bodyBg);
+  expect(colours.other).toBe(colours.ink);
+  expect(colours.current).toBe(colours.accent);
 
   // Click a number to jump to that page.
   await rail.getByRole("button", { name: "Page 10", exact: true }).click();

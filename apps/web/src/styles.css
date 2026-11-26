@@ -11,8 +11,6 @@
   --mark: #e4dfd3;
   --accent: #c2410c;
   --on-accent: #fff;
-  /* Orange for the page rail, whose colours are reversed (black rail on the light theme). */
-  --rail-accent: #ff8c42;
   --paper-ink: #000;
   --hl-red: #ff9a9a;
   --hl-green: #8fe39a;
@@ -45,7 +43,6 @@
   --mark: #34312b;
   --accent: #ff8c42;
   --on-accent: #000;
-  --rail-accent: #c2410c;
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.95 0 0 0 0 0.85 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
@@ -579,9 +576,11 @@ textarea.field {
   width: 56px;
   overflow-y: auto;
   scrollbar-width: none;
-  /* Reversed colours: black with white numbers on the light theme, light with black on dark. */
-  background-color: var(--fg);
-  color: var(--bg);
+  /* Same paper as the rest of the interface; numbers in ink (black on light, white on dark). */
+  background-color: var(--bg);
+  background-image: var(--grain);
+  border-right: 1px solid var(--muted);
+  color: var(--fg);
   padding: var(--s2) 0;
 }
 
@@ -611,18 +610,19 @@ textarea.field {
 }
 
 .page-rail-item:hover {
-  border-color: color-mix(in srgb, var(--bg) 35%, transparent);
+  background-color: var(--mark);
 }
 
+/* The current page: orange, in a rounded pill. */
 .page-rail-item[aria-current="page"] {
-  color: var(--rail-accent);
+  color: var(--accent);
   font-weight: 700;
-  border-color: color-mix(in srgb, var(--rail-accent) 70%, transparent);
-  background-color: color-mix(in srgb, var(--bg) 10%, transparent);
+  border-color: var(--accent);
+  background-color: var(--mark);
 }
 
 .page-rail-item:focus-visible {
-  outline: 1px solid var(--rail-accent);
+  outline: 1px solid var(--accent);
   outline-offset: -3px;
 }
 

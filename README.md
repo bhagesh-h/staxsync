@@ -32,7 +32,7 @@ To read your own PDFs instead of the examples, put them in `test/` (or set `PAPE
 - Search across titles, authors, tags, your highlights, comments and paper notes. Sort by added, opened, title, first author or year. Reading status: unread, reading, read.
 
 **Reader**
-- Continuous pages with no scrollbar: a **page rail** down the left side lists the page numbers (white on black in the light theme, black on light in the dark theme); the current page is orange. Click a number to go there. Zoom, fit width, two pages side by side, outline, find with match count, and a distraction-free Read mode.
+- Continuous pages with no scrollbar: a **page rail** down the left side lists the page numbers on the same paper as the rest of the interface (black numbers in the light theme, white in the dark theme); the current page is orange. Click a number to go there. Zoom, fit width, two pages side by side, outline, find with match count, and a distraction-free Read mode.
 - **Cite** the open paper in APA, MLA, Chicago, Harvard, IEEE, Vancouver or Nature style, or as BibTeX or RIS: copy or download. Citations come from doi.org (full author lists); offline, a basic citation is built from the PDF and the panel says so.
 - Tools: **Select · Highlight · Underline · Area · Note · Pen · Eraser**, with undo and redo.
 - Highlights come in **red, green, blue and yellow**. Click **Highlight ▾** (in the tool strip or the selection menu) to choose a colour, or press `1`–`4` (with text selected, the key highlights it in that colour).

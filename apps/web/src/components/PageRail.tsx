@@ -8,8 +8,9 @@ interface Props {
 }
 
 /**
- * Page rail: a narrow bar of page numbers in place of a scrollbar. The current page is orange
- * in a rounded pill; click any number to go there. The rail keeps the current page in view.
+ * Page rail: a narrow bar of page numbers in place of a scrollbar, on the same paper as the rest
+ * of the interface. Numbers are ink (black on the light theme, white on the dark); the current
+ * page is orange in a rounded pill. Click any number to go there; the current page stays in view.
  */
 export function PageRail({ page, count, label, onPick }: Props) {
   const listRef = useRef<HTMLOListElement>(null);
