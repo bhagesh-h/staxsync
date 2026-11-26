@@ -1,6 +1,7 @@
 import { getStroke } from "perfect-freehand";
+import { colorOf, DEFAULT_COLOR } from "../lib/colors";
 import { NOTE_SIZE, quadPolygon, type Point } from "../lib/geometry";
-import type { Annotation, InkPoint, Quad } from "../lib/types";
+import type { Annotation, HighlightColor, InkPoint, Quad } from "../lib/types";
 
 /**
  * Draws a page's annotations as SVG inside the pdf.js page element. The SVG uses the page's
@@ -16,9 +17,9 @@ export interface ViewportLike {
 }
 
 export type Preview =
-  | { kind: "quads"; markup: "highlight" | "underline"; quads: Quad[] }
+  | { kind: "quads"; markup: "highlight" | "underline"; quads: Quad[]; color: HighlightColor }
   | { kind: "area"; rect: [number, number, number, number] }
-  | { kind: "ink"; points: InkPoint[]; width: number; freehand: boolean };
+  | { kind: "ink"; points: InkPoint[]; width: number; freehand: boolean; color: HighlightColor };
 
 const SVG = "http://www.w3.org/2000/svg";
 const OVERLAY_CLASS = "sx-overlay";
@@ -83,6 +84,38 @@ export function strokePath(points: InkPoint[], vp: ViewportLike, width: number, 
   return outlinePath(outline);
 }
 
+/**
+ * A chat-bubble outline with its top-left corner at (x, y): rounded body plus a tail at the
+ * bottom left. Used for notes and as the "has a comment" marker.
+ */
+export function bubblePath(x: number, y: number, w: number, h: number): string {
+  const body = h * 0.74;
+  const r = Math.min(w, body) * 0.22;
+  const f = (n: number) => n.toFixed(2);
+  return [
+    `M${f(x + r)} ${f(y)}`,
+    `H${f(x + w - r)}`,
+    `Q${f(x + w)} ${f(y)} ${f(x + w)} ${f(y + r)}`,
+    `V${f(y + body - r)}`,
+    `Q${f(x + w)} ${f(y + body)} ${f(x + w - r)} ${f(y + body)}`,
+    `H${f(x + w * 0.46)}`,
+    `L${f(x + w * 0.18)} ${f(y + h)}`,
+    `L${f(x + w * 0.24)} ${f(y + body)}`,
+    `H${f(x + r)}`,
+    `Q${f(x)} ${f(y + body)} ${f(x)} ${f(y + body - r)}`,
+    `V${f(y + r)}`,
+    `Q${f(x)} ${f(y)} ${f(x + r)} ${f(y)}`,
+    "Z",
+  ].join(" ");
+}
+
+function drawBubble(g: SVGGElement, x: number, y: number, size: number, color: HighlightColor, dots: boolean): void {
+  g.appendChild(el("path", { d: bubblePath(x, y, size, size), class: `sx-bubble c-${color}` }));
+  if (!dots) return;
+  const cy = y + size * 0.37;
+  for (const fx of [0.3, 0.5, 0.7]) g.appendChild(el("circle", { cx: x + size * fx, cy, r: size * 0.065, class: "sx-bubble-dot" }));
+}
+
 function drawQuads(g: SVGGElement, quads: Quad[], markup: "highlight" | "underline", vp: ViewportLike, cls = ""): void {
   const view = toView(vp);
   for (const q of quads) {
@@ -114,12 +147,17 @@ function viewPoints(a: Annotation, vp: ViewportLike): Point[] {
 }
 
 function drawAnnotation(svg: SVGSVGElement, a: Annotation, vp: ViewportLike, selected: boolean): void {
+  const color = colorOf(a);
   const g = el("g", { "data-annotation-id": a.id, "data-kind": a.kind, class: selected ? "sx-selected" : "" });
+  if (color) g.setAttribute("data-color", color);
   const view = toView(vp);
+  const hasComment = !!a.comment.trim() || a.replies.length > 0;
   switch (a.kind) {
     case "highlight":
+      drawQuads(g, a.quads ?? [], "highlight", vp, `c-${color ?? DEFAULT_COLOR}`);
+      break;
     case "underline":
-      drawQuads(g, a.quads ?? [], a.kind, vp);
+      drawQuads(g, a.quads ?? [], "underline", vp);
       break;
     case "area": {
       if (!a.rect) break;
@@ -130,21 +168,21 @@ function drawAnnotation(svg: SVGSVGElement, a: Annotation, vp: ViewportLike, sel
     case "note": {
       if (!a.at) break;
       const [x, y] = view(a.at[0], a.at[1]);
-      g.appendChild(el("rect", { x, y, width: NOTE_SIZE, height: NOTE_SIZE, class: "sx-note" }));
+      drawBubble(g, x, y, NOTE_SIZE, color ?? DEFAULT_COLOR, hasComment);
       break;
     }
     case "ink":
     case "freehandHighlight":
       for (const stroke of a.strokes ?? []) {
-        g.appendChild(el("path", { d: strokePath(stroke, vp, a.width ?? 1.5, a.input === "stylus"), class: a.kind === "ink" ? "sx-ink" : "sx-hl" }));
+        g.appendChild(el("path", { d: strokePath(stroke, vp, a.width ?? 1.5, a.input === "stylus"), class: a.kind === "ink" ? "sx-ink" : `sx-hl c-${color ?? DEFAULT_COLOR}` }));
       }
       break;
   }
   const pts = viewPoints(a, vp);
   if (pts.length > 0) {
     const [x0, y0, x1, y1] = boundsOf(pts);
-    if ((a.comment.trim() || a.replies.length > 0) && a.kind !== "note") {
-      g.appendChild(el("rect", { x: x1 + 3, y: y0, width: 5, height: 5, class: "sx-comment-mark" }));
+    if (hasComment && a.kind !== "note") {
+      g.appendChild(el("path", { d: bubblePath(x1 + 2, y0 - 1, 8, 8), class: "sx-comment-mark" }));
     }
     if (selected) {
       g.appendChild(el("rect", { x: x0 - 2, y: y0 - 2, width: x1 - x0 + 4, height: y1 - y0 + 4, class: "sx-selection" }));
@@ -155,14 +193,14 @@ function drawAnnotation(svg: SVGSVGElement, a: Annotation, vp: ViewportLike, sel
 
 function drawPreview(svg: SVGSVGElement, preview: Preview, vp: ViewportLike): void {
   const g = el("g", { class: "sx-preview" });
-  if (preview.kind === "quads") drawQuads(g, preview.quads, preview.markup, vp);
+  if (preview.kind === "quads") drawQuads(g, preview.quads, preview.markup, vp, preview.markup === "highlight" ? `c-${preview.color}` : "");
   if (preview.kind === "area") {
     const view = toView(vp);
     const [x0, y0, x1, y1] = boundsOf([view(preview.rect[0], preview.rect[1]), view(preview.rect[2], preview.rect[3])]);
     g.appendChild(el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: "sx-area" }));
   }
   if (preview.kind === "ink" && preview.points.length > 0) {
-    g.appendChild(el("path", { d: strokePath(preview.points, vp, preview.width, true), class: preview.freehand ? "sx-hl" : "sx-ink" }));
+    g.appendChild(el("path", { d: strokePath(preview.points, vp, preview.width, true), class: preview.freehand ? `sx-hl c-${preview.color}` : "sx-ink" }));
   }
   svg.appendChild(g);
 }

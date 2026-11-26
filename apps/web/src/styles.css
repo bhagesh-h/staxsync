@@ -1,16 +1,25 @@
 /*
- * StaxSync design tokens (todo.md §0.1): two colours, two greys, no motion.
- * Screens use these tokens only. Paper tokens are fixed because PDF pages are white paper.
+ * StaxSync design tokens: ink on paper, one orange accent for navigation, RGBY highlight
+ * colours on the page, no motion. Screens use these tokens only. Highlight colours are fixed
+ * because PDF pages are white paper in both themes.
  */
 :root {
-  --fg: #000;
-  --bg: #fff;
-  --muted: #5f5f5f;
-  --mark: #e6e6e6;
+  --fg: #111;
+  --bg: #f6f3ec;
+  --field: rgb(255 255 255 / 0.6);
+  --muted: #5c5a55;
+  --mark: #e4dfd3;
+  --accent: #c2410c;
+  --on-accent: #fff;
   --paper-ink: #000;
-  --paper-mark: #c4c4c4;
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --hl-red: #ff9a9a;
+  --hl-green: #8fe39a;
+  --hl-blue: #9ccfff;
+  --hl-yellow: #ffe45c;
+  /* Paper grain: fractal noise as a faint dark speckle. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.16 0 0 0 0 0.1 0 0 0 .11 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --font: "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Ubuntu Mono", ui-monospace, Menlo, Consolas, monospace;
   --size-ui: 14px;
   --size-meta: 12px;
   --s1: 4px;
@@ -24,10 +33,14 @@
 }
 
 :root[data-theme="dark"] {
-  --fg: #fff;
-  --bg: #000;
-  --muted: #a8a8a8;
-  --mark: #2e2e2e;
+  --fg: #f2efe8;
+  --bg: #141311;
+  --field: rgb(0 0 0 / 0.35);
+  --muted: #a9a59c;
+  --mark: #34312b;
+  --accent: #ff8c42;
+  --on-accent: #000;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.95 0 0 0 0 0.85 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
@@ -54,8 +67,13 @@ body,
   margin: 0;
 }
 
+body,
+.paper {
+  background-color: var(--bg);
+  background-image: var(--grain);
+}
+
 body {
-  background: var(--bg);
   color: var(--fg);
   font: var(--size-ui) / 1.4 var(--font);
   -webkit-text-size-adjust: 100%;
@@ -104,10 +122,11 @@ textarea {
   min-width: var(--control);
   padding: 0 var(--s2);
   border: 1px solid transparent;
-  background: var(--bg);
+  background: transparent;
   color: var(--fg);
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .btn:hover:not(:disabled) {
@@ -125,6 +144,93 @@ textarea {
   cursor: default;
 }
 
+/* Navigation buttons: the one orange accent. */
+.btn-nav {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.btn-nav:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.btn-nav[aria-pressed="true"],
+.btn-nav.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn-nav:disabled {
+  color: var(--muted);
+}
+
+.doi {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.doi:hover {
+  text-decoration: underline;
+}
+
+.reader-doi {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .reader-doi {
+    display: none;
+  }
+}
+
+/* RGBY colour swatches. */
+.swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 var(--s1);
+}
+
+.swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--paper-ink);
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .swatch {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+.swatch[aria-pressed="true"] {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border: 1px solid var(--paper-ink);
+  vertical-align: baseline;
+}
+
+.c-red { background-color: var(--hl-red); }
+.c-green { background-color: var(--hl-green); }
+.c-blue { background-color: var(--hl-blue); }
+.c-yellow { background-color: var(--hl-yellow); }
+
 .btn-outline {
   border-color: var(--muted);
 }
@@ -133,7 +239,7 @@ textarea {
   min-height: var(--control);
   padding: 0 var(--s2);
   border: 1px solid var(--muted);
-  background: var(--bg);
+  background: var(--field);
   /* 16px stops iOS from zooming into focused fields. */
   font-size: max(16px, var(--size-ui));
 }
@@ -323,7 +429,14 @@ textarea.field {
   height: 100dvh;
 }
 
+/* The reader's top bar stays on one line: the title and DOI shrink first. */
+.reader > .bar:first-child {
+  flex-wrap: nowrap;
+}
+
 .reader-title {
+  flex: 0 1 auto;
+  min-width: 4ch;
   max-width: 40ch;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -357,7 +470,8 @@ textarea.field {
   position: absolute;
   inset: 0;
   overflow: auto;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--grain);
   touch-action: pan-x pan-y pinch-zoom;
 }
 
@@ -411,7 +525,8 @@ textarea.field {
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--muted);
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--grain);
   min-height: 0;
 }
 
@@ -481,7 +596,8 @@ textarea.field {
 .floating {
   position: fixed;
   z-index: 20;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--grain);
   border: 1px solid var(--fg);
 }
 
@@ -525,7 +641,7 @@ textarea.field {
   z-index: 5;
   font-size: var(--size-meta);
   color: var(--muted);
-  background: var(--bg);
+  background-color: var(--bg);
   padding: 2px var(--s1);
 }
 
@@ -597,8 +713,43 @@ textarea.field {
   overflow: visible;
 }
 
-.sx-hl {
-  fill: var(--paper-mark);
+.sx-hl,
+.sx-hl.c-yellow,
+.sx-bubble.c-yellow {
+  fill: var(--hl-yellow);
+}
+
+.sx-hl.c-red,
+.sx-bubble.c-red {
+  fill: var(--hl-red);
+}
+
+.sx-hl.c-green,
+.sx-bubble.c-green {
+  fill: var(--hl-green);
+}
+
+.sx-hl.c-blue,
+.sx-bubble.c-blue {
+  fill: var(--hl-blue);
+}
+
+/* SVG elements carry the colour class too; only fill applies to them. */
+.sx-overlay .c-red,
+.sx-overlay .c-green,
+.sx-overlay .c-blue,
+.sx-overlay .c-yellow {
+  background-color: transparent;
+}
+
+.sx-bubble {
+  stroke: var(--paper-ink);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.sx-bubble-dot {
+  fill: var(--paper-ink);
 }
 
 .sx-ul {
@@ -612,18 +763,13 @@ textarea.field {
   stroke-dasharray: 4 3;
 }
 
-.sx-note {
-  fill: #fff;
-  stroke: var(--paper-ink);
-  stroke-width: 1.2;
-}
-
 .sx-ink {
   fill: var(--paper-ink);
 }
 
 .sx-comment-mark {
   fill: var(--paper-ink);
+  stroke: none;
 }
 
 .sx-selection {

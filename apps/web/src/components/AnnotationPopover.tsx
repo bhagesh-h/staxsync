@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { colorOf, takesColor } from "../lib/colors";
 import { newId } from "../lib/ids";
 import { kindLabel } from "../lib/markdown";
 import type { Annotation } from "../lib/types";
+import { ColorSwatches } from "./ColorSwatches";
 
 interface Props {
   annotation: Annotation;
@@ -88,6 +90,12 @@ export function AnnotationPopover({ annotation: a, x, y, pageLabel, autoFocus, o
           <button className="btn btn-outline" aria-pressed={a.kind === "underline"} onClick={() => onChange({ kind: "underline" })}>
             Underline
           </button>
+        </div>
+      )}
+      {takesColor(a.kind) && (
+        <div className="row">
+          <span className="meta">Colour</span>
+          <ColorSwatches value={colorOf(a) ?? null} label="Colour" onPick={(color) => onChange({ color })} />
         </div>
       )}
       {a.anchor?.exact && <blockquote>{a.anchor.exact}</blockquote>}

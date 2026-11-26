@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { colorLabel, colorOf } from "../lib/colors";
 import { compareAnnotations } from "../lib/geometry";
 import { kindLabel } from "../lib/markdown";
 import type { Annotation, AnnotationKind } from "../lib/types";
@@ -65,7 +66,8 @@ export function AnnotationSidebar(p: Props) {
               <div key={a.id} style={{ display: "flex", alignItems: "flex-start" }}>
                 <button className="ann-item" aria-current={a.id === p.selectedId} onClick={() => p.onSelect(a)} data-testid="sidebar-item">
                   <span className="meta">
-                    p. {p.pageLabel(a.page)} · {kindLabel(a.kind)}
+                    {colorOf(a) && <span className={`dot c-${colorOf(a)}`} aria-hidden="true" />}
+                    p. {p.pageLabel(a.page)} · {colorOf(a) ? `${colorLabel(colorOf(a)!)} ${kindLabel(a.kind).toLowerCase()}` : kindLabel(a.kind)}
                   </span>
                   {a.anchor?.exact && <span className="ann-quote">{a.anchor.exact.length > 220 ? `${a.anchor.exact.slice(0, 220)}…` : a.anchor.exact}</span>}
                   {a.comment && <span style={{ display: "block", marginTop: 4 }}>{a.comment}</span>}

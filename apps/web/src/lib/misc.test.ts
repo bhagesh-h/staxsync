@@ -65,5 +65,6 @@ describe("markdown export", () => {
     expect(md.indexOf("first")).toBeLessThan(md.indexOf("second"));
     expect(md).toContain("> first");
     expect(md).toContain("why");
+    expect(md).toContain("Highlight (yellow)");
   });
 });

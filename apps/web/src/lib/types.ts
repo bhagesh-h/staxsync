@@ -13,6 +13,9 @@ export type AnnotationKind = "highlight" | "underline" | "freehandHighlight" | "
 
 export type InputKind = "mouse" | "touch" | "stylus";
 
+/** Highlight colours (RGBY). Missing on older annotations, which then show as yellow. */
+export type HighlightColor = "red" | "green" | "blue" | "yellow";
+
 export interface Reply {
   id: string;
   body: string;
@@ -37,6 +40,8 @@ export interface Annotation {
   /** Stroke width in PDF units (ink and freehand highlight). */
   width?: number;
   anchor?: TextAnchor;
+  /** Highlights, freehand highlights and notes. Underlines, ink and areas are black. */
+  color?: HighlightColor;
   comment: string;
   replies: Reply[];
   input: InputKind;

@@ -1,3 +1,4 @@
+import { colorLabel, colorOf } from "./colors";
 import { compareAnnotations } from "./geometry";
 import type { Annotation, PaperMeta } from "./types";
 
@@ -41,7 +42,8 @@ export function annotationsToMarkdown(
   const sorted = [...annotations].sort(compareAnnotations);
   if (sorted.length) lines.push("## Annotations", "");
   for (const a of sorted) {
-    lines.push(`### p. ${pageLabel(a.page)} · ${kindLabel(a.kind)}`, "");
+    const color = colorOf(a);
+    lines.push(`### p. ${pageLabel(a.page)} · ${kindLabel(a.kind)}${color ? ` (${colorLabel(color).toLowerCase()})` : ""}`, "");
     if (a.anchor?.exact) lines.push(quoteBlock(a.anchor.exact), "");
     if (a.comment.trim()) lines.push(a.comment.trim(), "");
     for (const r of a.replies) lines.push(`- ${r.body.trim()}`);

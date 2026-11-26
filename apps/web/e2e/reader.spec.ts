@@ -53,10 +53,18 @@ async function drag(page: Page, from: [number, number], to: [number, number]) {
 
 const overlay = (page: Page, kind: string) => page.locator(`.page[data-page-number="1"] .sx-overlay [data-kind="${kind}"]`);
 
-test("library lists the example papers with their metadata", async ({ page }) => {
+test("library lists the example papers with their metadata and DOI, in Ubuntu", async ({ page }) => {
   await openLibrary(page);
   await expect(page.getByTestId("paper-row")).toHaveCount(2);
   await expect(page.getByText("Nature Communications").first()).toBeVisible();
+  const doi = page.getByTestId("paper-doi").filter({ hasText: "10.1038/s41467-022-33093-3" });
+  await expect(doi).toHaveAttribute("href", "https://doi.org/10.1038/s41467-022-33093-3");
+  const ubuntu = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return { family: getComputedStyle(document.body).fontFamily, loaded: document.fonts.check('16px "Ubuntu"') };
+  });
+  expect(ubuntu.family).toMatch(/^"?Ubuntu"?/);
+  expect(ubuntu.loaded).toBe(true);
 });
 
 test("papers take several tags and the tag filter includes, excludes and matches all/any", async ({ page }) => {
@@ -98,19 +106,25 @@ test("highlight a selection, comment on it, and find it again after reload", asy
   const text = await selectTextOnFirstPage(page);
   await page.keyboard.press("h");
   await expect(overlay(page, "highlight")).toHaveCount(1);
+  await expect(overlay(page, "highlight")).toHaveAttribute("data-color", "yellow");
+  await expect(page.getByTestId("reader-doi")).toHaveText("doi:10.1038/s41467-022-33093-3");
 
   // Clicking the highlight opens it for a comment.
   const hl = await overlay(page, "highlight").locator("polygon").first().boundingBox();
   await page.mouse.click(hl!.x + hl!.width / 2, hl!.y + hl!.height / 2);
   const popover = page.getByTestId("annotation-popover");
   await expect(popover).toBeVisible();
+  await popover.getByRole("button", { name: "Colour blue" }).click();
+  await expect(overlay(page, "highlight")).toHaveAttribute("data-color", "blue");
   await popover.getByRole("textbox", { name: "Comment" }).fill("Key definition");
   await popover.getByRole("button", { name: "Close" }).click();
 
   await page.reload();
   await expect(overlay(page, "highlight")).toHaveCount(1);
+  await expect(overlay(page, "highlight")).toHaveAttribute("data-color", "blue");
   await page.getByRole("button", { name: /^Notes/ }).click();
   const item = page.getByTestId("sidebar-item").first();
+  await expect(item).toContainText("Blue highlight");
   await expect(item).toContainText(text.replace(/\s+/g, " ").trim().slice(0, 15));
   await expect(item).toContainText("Key definition");
 });
@@ -148,7 +162,26 @@ test("area, note, pen and eraser tools", async ({ page }) => {
   const [nx, ny] = at(0.9, 0.2);
   await page.mouse.click(nx, ny);
   await expect(overlay(page, "note")).toHaveCount(1);
+  // A note is a chat bubble (a path with a tail), not a box.
+  await expect(overlay(page, "note").locator("path.sx-bubble")).toHaveCount(1);
+  await expect(overlay(page, "note").locator("rect")).toHaveCount(1); // only the selection outline
   await expect(page.getByTestId("annotation-popover")).toBeVisible();
+});
+
+test("number keys pick RGBY colours and highlight the selection in them", async ({ page }) => {
+  await openPaper(page);
+  const colours = ["red", "green", "blue", "yellow"];
+  for (const [i, colour] of colours.entries()) {
+    await selectTextOnFirstPage(page);
+    await page.keyboard.press(String(i + 1));
+    await expect(overlay(page, "highlight").nth(i)).toHaveAttribute("data-color", colour);
+  }
+  // The highlighter keeps the last colour picked.
+  await expect(page.getByRole("button", { name: "Highlighter yellow" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Highlighter green" }).click();
+  await selectTextOnFirstPage(page);
+  await page.keyboard.press("h");
+  await expect(overlay(page, "highlight").nth(4)).toHaveAttribute("data-color", "green");
 });
 
 test("find in document reports matches", async ({ page }) => {

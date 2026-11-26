@@ -2,19 +2,21 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { EventBus, PDFLinkService, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp, useCommands } from "../app-context";
+import { colorLabel, DEFAULT_COLOR, HIGHLIGHT_COLORS, isHighlightColor, takesColor } from "../lib/colors";
 import type { Command } from "../lib/commands";
 import { annotationAnchorPoint, hitsAnnotation, normaliseRect, type Point } from "../lib/geometry";
 import { History } from "../lib/history";
 import { newId } from "../lib/ids";
 import { annotationsToMarkdown, kindLabel } from "../lib/markdown";
 import { loadPaper, loadPreference, savePaper, savePreference, type LibraryDoc } from "../lib/storage";
-import type { Annotation, AnnotationKind, InkPoint, InputKind, PaperRecord, ReadingPosition } from "../lib/types";
+import type { Annotation, AnnotationKind, HighlightColor, InkPoint, InputKind, PaperRecord, ReadingPosition } from "../lib/types";
 import { metaFromPdf } from "../pdf/metadata";
 import { drawOverlay, type Preview } from "../pdf/overlay";
 import { loadPdfjs, paperUrl } from "../pdf/pdfjs";
 import { anchorForRange, caretAt, clientToPdf, pdfUnitsPerPixel, rangeBetween, rangeToQuads, snapToWords, type Caret, type PageRef } from "../pdf/selection";
 import { AnnotationPopover } from "./AnnotationPopover";
 import { AnnotationSidebar } from "./AnnotationSidebar";
+import { ColorSwatches } from "./ColorSwatches";
 import { OutlineTree, type OutlineNode } from "./OutlineTree";
 
 type Tool = "select" | "highlight" | "underline" | "area" | "note" | "pen" | "eraser";
@@ -77,6 +79,10 @@ export function Reader({ paper, setLibrary }: Props) {
   const [note, setNoteState] = useState(initial.note);
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
   const [tool, setToolState] = useState<Tool>("select");
+  const [color, setColorState] = useState<HighlightColor>(() => {
+    const saved = loadPreference("highlightColor");
+    return isHighlightColor(saved) ? saved : DEFAULT_COLOR;
+  });
   const [fingerDraws, setFingerDraws] = useState(() => loadPreference("fingerDraws") === "1");
   const [hasStylus, setHasStylus] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -112,6 +118,7 @@ export function Reader({ paper, setLibrary }: Props) {
   const noteRef = useRef(note);
   const selectedRef = useRef<string | null>(null);
   const toolRef = useRef<Tool>("select");
+  const colorRef = useRef<HighlightColor>(color);
   const fingerDrawsRef = useRef(fingerDraws);
   const positionRef = useRef<ReadingPosition | undefined>(initial.position);
   const historyRef = useRef(new History<Annotation[]>());
@@ -245,17 +252,19 @@ export function Reader({ paper, setLibrary }: Props) {
 
   const makeAnnotation = (kind: AnnotationKind, page: number, input: InputKind, fields: Partial<Annotation>): Annotation => {
     const now = new Date().toISOString();
-    return { id: newId("a"), kind, page, comment: "", replies: [], input, createdAt: now, updatedAt: now, ...fields };
+    const base: Annotation = { id: newId("a"), kind, page, comment: "", replies: [], input, createdAt: now, updatedAt: now };
+    if (takesColor(kind)) base.color = colorRef.current;
+    return { ...base, ...fields };
   };
 
-  const createFromRange = (range: Range, kind: "highlight" | "underline", input: InputKind): Annotation[] => {
+  const createFromRange = (range: Range, kind: "highlight" | "underline", input: InputKind, pick?: HighlightColor): Annotation[] => {
     const byPage = rangeToQuads(range, allPages());
     if (byPage.size === 0) {
       announce("Couldn't find text in that selection");
       return [];
     }
     const anchor = anchorForRange(range);
-    const list = [...byPage].map(([page, quads]) => makeAnnotation(kind, page, input, { quads, anchor }));
+    const list = [...byPage].map(([page, quads]) => makeAnnotation(kind, page, input, kind === "highlight" ? { quads, anchor, color: pick ?? colorRef.current } : { quads, anchor }));
     addAnnotations(list);
     return list;
   };
@@ -269,10 +278,10 @@ export function Reader({ paper, setLibrary }: Props) {
     return savedRangeRef.current;
   };
 
-  const createFromSelection = (kind: "highlight" | "underline"): Annotation[] => {
+  const createFromSelection = (kind: "highlight" | "underline", pick?: HighlightColor): Annotation[] => {
     const range = currentSelectionRange();
     if (!range || range.collapsed) return [];
-    const list = createFromRange(range, kind, lastInputRef.current);
+    const list = createFromRange(range, kind, lastInputRef.current, pick);
     window.getSelection()?.removeAllRanges();
     savedRangeRef.current = null;
     setSelMenu(null);
@@ -311,6 +320,19 @@ export function Reader({ paper, setLibrary }: Props) {
     setLive(next);
     setHistoryTick((t) => t + 1);
     announce("Redone");
+  };
+
+  const setColor = (c: HighlightColor) => {
+    colorRef.current = c;
+    setColorState(c);
+    savePreference("highlightColor", c);
+  };
+
+  /** Number keys / swatches: highlight the selection in that colour, or just pick the colour. */
+  const pickColor = (c: HighlightColor) => {
+    setColor(c);
+    if (currentSelectionRange()) createFromSelection("highlight", c);
+    else announce(`${colorLabel(c)} highlighter`);
   };
 
   const selectTool = (t: Tool) => {
@@ -510,7 +532,7 @@ export function Reader({ paper, setLibrary }: Props) {
             const p = clientToPdf(g.page, ev.clientX, ev.clientY);
             g.points.push([p[0], p[1], ev.pressure || 0.5]);
           }
-          previewRef.current = { page: g.page.index, preview: { kind: "ink", points: g.points, width: g.freehand ? FREEHAND_WIDTH : INK_WIDTH, freehand: g.freehand } };
+          previewRef.current = { page: g.page.index, preview: { kind: "ink", points: g.points, width: g.freehand ? FREEHAND_WIDTH : INK_WIDTH, freehand: g.freehand, color: colorRef.current } };
           drawPage(g.page.index);
           break;
         }
@@ -522,7 +544,7 @@ export function Reader({ paper, setLibrary }: Props) {
           if (!caret) break;
           g.range = snapToWords(rangeBetween(g.start, caret));
           const quads = rangeToQuads(g.range, [g.page]).get(g.page.index) ?? [];
-          previewRef.current = { page: g.page.index, preview: { kind: "quads", markup: g.markup, quads } };
+          previewRef.current = { page: g.page.index, preview: { kind: "quads", markup: g.markup, quads, color: colorRef.current } };
           drawPage(g.page.index);
           break;
         }
@@ -750,8 +772,8 @@ export function Reader({ paper, setLibrary }: Props) {
 
   // ---- commands ---------------------------------------------------------------------
 
-  const actions = useRef({ createFromSelection, commentOnSelection, selectTool, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection });
-  actions.current = { createFromSelection, commentOnSelection, selectTool, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection };
+  const actions = useRef({ createFromSelection, commentOnSelection, selectTool, pickColor, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection });
+  actions.current = { createFromSelection, commentOnSelection, selectTool, pickColor, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection };
 
   const commands: Command[] = useMemo(() => {
     const act = () => actions.current;
@@ -759,6 +781,12 @@ export function Reader({ paper, setLibrary }: Props) {
       { id: "reader_selection_highlight", title: "Highlight selection (or Highlight tool)", keys: ["h"], run: () => (act().hasSelection() ? act().createFromSelection("highlight") : act().selectTool("highlight")) },
       { id: "reader_selection_underline", title: "Underline selection (or Underline tool)", keys: ["u"], run: () => (act().hasSelection() ? act().createFromSelection("underline") : act().selectTool("underline")) },
       { id: "reader_selection_comment", title: "Comment on selection", keys: ["c"], run: () => act().commentOnSelection() },
+      ...HIGHLIGHT_COLORS.map((c) => ({
+        id: `reader_color_${c.color}`,
+        title: `${c.label} highlight (selection or next highlight)`,
+        keys: [c.key],
+        run: () => act().pickColor(c.color),
+      })),
       { id: "reader_tool_select", title: "Select tool", keys: ["v"], run: () => act().selectTool("select") },
       { id: "reader_tool_area", title: "Area tool", keys: ["a"], run: () => act().selectTool("area") },
       { id: "reader_tool_note", title: "Note tool", keys: ["n"], run: () => act().selectTool("note") },
@@ -803,14 +831,19 @@ export function Reader({ paper, setLibrary }: Props) {
       {!readMode && (
         <>
           <header className="bar">
-            <a className="btn" href="#/" style={{ display: "inline-flex", alignItems: "center" }}>
+            <a className="btn btn-nav" href="#/" style={{ display: "inline-flex", alignItems: "center" }}>
               ← Library
             </a>
             <span className="reader-title" title={title}>
               {title}
             </span>
+            {paper.meta?.doi && (
+              <a className="doi reader-doi" href={`https://doi.org/${paper.meta.doi}`} target="_blank" rel="noopener noreferrer" data-testid="reader-doi">
+                doi:{paper.meta.doi}
+              </a>
+            )}
             <span className="spacer" />
-            <button className="btn" aria-label="Previous page" disabled={pageNumber <= 1} onClick={() => goToPage(pageNumber - 1)}>
+            <button className="btn btn-nav" aria-label="Previous page" disabled={pageNumber <= 1} onClick={() => goToPage(pageNumber - 1)}>
               ‹
             </button>
             <input
@@ -825,36 +858,36 @@ export function Reader({ paper, setLibrary }: Props) {
             <span className="meta" data-testid="page-count">
               of {numPages}
             </span>
-            <button className="btn" aria-label="Next page" disabled={pageNumber >= numPages} onClick={() => goToPage(pageNumber + 1)}>
+            <button className="btn btn-nav" aria-label="Next page" disabled={pageNumber >= numPages} onClick={() => goToPage(pageNumber + 1)}>
               ›
             </button>
             <span className="sep" />
-            <button className="btn" aria-label="Zoom out" onClick={zoomOut}>
+            <button className="btn btn-nav" aria-label="Zoom out" onClick={zoomOut}>
               −
             </button>
             <span className="meta" style={{ minWidth: "4ch", textAlign: "center" }} aria-label="Zoom level">
               {scalePct}%
             </span>
-            <button className="btn" aria-label="Zoom in" onClick={zoomIn}>
+            <button className="btn btn-nav" aria-label="Zoom in" onClick={zoomIn}>
               +
             </button>
-            <button className="btn" onClick={fitWidth}>
+            <button className="btn btn-nav" onClick={fitWidth}>
               Fit width
             </button>
             <span className="sep" />
-            <button className="btn" aria-pressed={findOpen} onClick={() => (findOpen ? closeFind() : openFind())}>
+            <button className="btn btn-nav" aria-pressed={findOpen} onClick={() => (findOpen ? closeFind() : openFind())}>
               Find
             </button>
-            <button className="btn" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)}>
+            <button className="btn btn-nav" aria-pressed={leftOpen} onClick={() => setLeftOpen((o) => !o)}>
               Outline
             </button>
-            <button className="btn" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)}>
+            <button className="btn btn-nav" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)}>
               Notes {annotations.length > 0 ? annotations.length : ""}
             </button>
-            <button className="btn" onClick={() => setReadMode(true)}>
+            <button className="btn btn-nav" onClick={() => setReadMode(true)}>
               Read
             </button>
-            <button className="btn" aria-haspopup="menu" aria-expanded={menuOpen} aria-label="More" onClick={() => setMenuOpen((o) => !o)}>
+            <button className="btn btn-nav" aria-haspopup="menu" aria-expanded={menuOpen} aria-label="More" onClick={() => setMenuOpen((o) => !o)}>
               ⋯
             </button>
             {menuOpen && (
@@ -884,9 +917,12 @@ export function Reader({ paper, setLibrary }: Props) {
           </header>
           <div className="bar toolstrip" role="toolbar" aria-label="Annotation tools">
             {TOOLS.map((t) => (
-              <button key={t.tool} className="btn" aria-pressed={tool === t.tool} title={`${t.label} (${t.key.toUpperCase()})`} onClick={() => selectTool(t.tool)}>
-                {t.label}
-              </button>
+              <span key={t.tool} style={{ display: "inline-flex", alignItems: "center", flex: "none" }}>
+                <button className="btn" aria-pressed={tool === t.tool} title={`${t.label} (${t.key.toUpperCase()})`} onClick={() => selectTool(t.tool)}>
+                  {t.label}
+                </button>
+                {t.tool === "highlight" && <ColorSwatches value={color} label="Highlighter" onPick={setColor} />}
+              </span>
             ))}
             <span className="sep" />
             <button className="btn" disabled={!canUndo} onClick={undo}>
@@ -966,7 +1002,7 @@ export function Reader({ paper, setLibrary }: Props) {
           {status === "error" && <p className="status">Couldn't open this PDF: {error}</p>}
           {readMode && (
             <>
-              <button className="btn read-mode-exit" onClick={() => setReadMode(false)}>
+              <button className="btn btn-nav read-mode-exit" onClick={() => setReadMode(false)}>
                 Exit read mode
               </button>
               <span className="read-mode-counter">
@@ -1001,6 +1037,7 @@ export function Reader({ paper, setLibrary }: Props) {
           <button className="btn" onClick={() => createFromSelection("highlight")}>
             Highlight
           </button>
+          <ColorSwatches value={color} label="Highlight" keepSelection onPick={pickColor} />
           <button className="btn" onClick={() => createFromSelection("underline")}>
             Underline
           </button>

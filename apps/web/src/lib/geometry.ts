@@ -93,7 +93,8 @@ function quadAsPolygon(q: Quad): Point[] {
   ];
 }
 
-export const NOTE_SIZE = 14;
+/** Size of a note's chat bubble in PDF units (its hit area is this square). */
+export const NOTE_SIZE = 16;
 
 /** Whether a PDF-space point touches an annotation, within `tolerance` PDF units. */
 export function hitsAnnotation(a: Annotation, p: Point, tolerance: number): boolean {

@@ -169,7 +169,7 @@ export function Library({ library, setLibrary, missingPaper }: Props) {
           ))}
         </select>
         <span className="spacer" />
-        <button className="btn" onClick={toggleTheme}>
+        <button className="btn btn-nav" onClick={toggleTheme}>
           {theme === "dark" ? "Light" : "Dark"}
         </button>
       </header>
@@ -306,6 +306,13 @@ function PaperRow({
         {m?.pages ? <span>{m.pages} pages</span> : null}
         {annotationCount > 0 && <span>{annotationCount} annotation{annotationCount === 1 ? "" : "s"}</span>}
       </div>
+      {m?.doi && (
+        <div className="paper-line">
+          <a className="doi" href={`https://doi.org/${m.doi}`} target="_blank" rel="noopener noreferrer" data-testid="paper-doi">
+            doi:{m.doi}
+          </a>
+        </div>
+      )}
       <div className="paper-line">
         {paper.tags.map((id) => {
           const name = tags.find((t) => t.id === id)?.name ?? "?";
