@@ -882,14 +882,14 @@ export function Reader({ paper, setLibrary }: Props) {
               </a>
             )}
             <span className="spacer" />
-            <button className="btn btn-nav" onClick={zoomOut}>
-              Zoom out
+            <button className="btn btn-nav" aria-label="Zoom out" title="Zoom out" onClick={zoomOut}>
+              −
             </button>
             <span className="meta" style={{ minWidth: "4ch", textAlign: "center" }} aria-label="Zoom level">
               {scalePct}%
             </span>
-            <button className="btn btn-nav" onClick={zoomIn}>
-              Zoom in
+            <button className="btn btn-nav" aria-label="Zoom in" title="Zoom in" onClick={zoomIn}>
+              +
             </button>
             <button className="btn btn-nav" onClick={fitWidth}>
               Fit width

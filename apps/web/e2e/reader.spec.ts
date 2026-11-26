@@ -300,12 +300,15 @@ test("the library has no sidebar, every button is orange and labels carry no dec
   });
   expect(report.colours).toHaveLength(1);
   expect(accent).toMatch(/^#/);
-  expect(report.text).not.toMatch(/[←→▾⋯×‹›✓#−]/);
+  expect(report.text).not.toMatch(/[←→▾⋯×‹›✓#]/);
 
   await page.getByRole("link", { name: CHIP_PAPER }).click();
   await expect(page.getByTestId("page-rail").getByRole("button")).toHaveCount(16);
   const readerText = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("button, a.btn")).map((b) => b.innerText).join(" "));
-  expect(readerText).not.toMatch(/[←→▾⋯×‹›✓#−]/);
+  expect(readerText).not.toMatch(/[←→▾⋯×‹›✓#]/);
+  // Zoom is just − and +, named for screen readers.
+  await expect(page.getByRole("button", { name: "Zoom out" })).toHaveText("−");
+  await expect(page.getByRole("button", { name: "Zoom in" })).toHaveText("+");
   const libraryLink = page.getByRole("link", { name: "Library", exact: true });
   const highlight = page.getByRole("button", { name: /^Highlight tool/ });
   expect(await libraryLink.evaluate((el) => getComputedStyle(el).color)).toBe(await highlight.evaluate((el) => getComputedStyle(el).color));
