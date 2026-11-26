@@ -44,8 +44,8 @@ export function AnnotationSidebar(p: Props) {
           Note
         </button>
         <span className="spacer" />
-        <button className="btn" onClick={p.onClose} aria-label="Close panel">
-          ×
+        <button className="btn" onClick={p.onClose}>
+          Close
         </button>
       </div>
       {p.tab === "annotations" ? (
@@ -73,8 +73,8 @@ export function AnnotationSidebar(p: Props) {
                   {a.comment && <span style={{ display: "block", marginTop: 4 }}>{a.comment}</span>}
                   {a.replies.length > 0 && <span className="meta">{a.replies.length} repl{a.replies.length === 1 ? "y" : "ies"}</span>}
                 </button>
-                <button className="btn" aria-label="Delete annotation" onClick={() => p.onDelete(a.id)}>
-                  ×
+                <button className="btn" aria-label={`Delete ${kindLabel(a.kind).toLowerCase()} on page ${p.pageLabel(a.page)}`} onClick={() => p.onDelete(a.id)}>
+                  Delete
                 </button>
               </div>
             ))}

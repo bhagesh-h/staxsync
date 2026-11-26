@@ -102,7 +102,7 @@ test("papers take several tags and the tag filter includes, excludes and matches
   }
   await expect(chip.getByTestId("paper-tag")).toHaveCount(2);
 
-  const rail = page.getByRole("navigation", { name: "Filters" });
+  const rail = page.getByRole("toolbar", { name: "Filters" });
   await rail.getByRole("button", { name: /^cardio,/ }).click(); // include
   await expect(page.getByTestId("paper-row")).toHaveCount(1);
   await expect(chip).toBeVisible();
@@ -272,4 +272,131 @@ test("read mode hides the toolbars and comes back", async ({ page }) => {
   await expect(page.getByRole("toolbar", { name: "Annotation tools" })).toHaveCount(0);
   await page.getByRole("button", { name: "Exit read mode" }).click();
   await expect(page.getByRole("toolbar", { name: "Annotation tools" })).toBeVisible();
+});
+
+
+/** doi.org stand-in: answers per Accept header, like the real content negotiation. */
+async function mockDoi(page: Page) {
+  await page.route("https://doi.org/**", (route) => {
+    const accept = route.request().headers()["accept"] ?? "";
+    const doi = decodeURIComponent(new URL(route.request().url()).pathname.slice(1));
+    const body = accept.includes("bibtex")
+      ? `@article{mock_${doi.slice(-4)}, title={Mock}, doi={${doi}}}`
+      : accept.includes("research-info")
+        ? `TY  - JOUR\nDO  - ${doi}\nER  - `
+        : `MOCK ${/style=([\w-]+)/.exec(accept)?.[1] ?? "?"} citation for ${doi}`;
+    return route.fulfill({ status: 200, contentType: "text/plain; charset=utf-8", body });
+  });
+}
+
+test("the library has no sidebar, every button is orange and labels carry no decorative symbols", async ({ page }) => {
+  await openLibrary(page);
+  await expect(page.locator(".rail")).toHaveCount(0);
+  await expect(page.getByRole("navigation")).toHaveCount(0);
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+  const report = await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll<HTMLElement>("button, a.btn"));
+    return { colours: [...new Set(buttons.filter((b) => !(b as HTMLButtonElement).disabled).map((b) => getComputedStyle(b).color))], text: buttons.map((b) => b.innerText).join(" ") };
+  });
+  expect(report.colours).toHaveLength(1);
+  expect(accent).toMatch(/^#/);
+  expect(report.text).not.toMatch(/[←→▾⋯×‹›✓#−]/);
+
+  await page.getByRole("link", { name: CHIP_PAPER }).click();
+  await expect(page.getByTestId("page-count")).toHaveText("of 16");
+  const readerText = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("button, a.btn")).map((b) => b.innerText).join(" "));
+  expect(readerText).not.toMatch(/[←→▾⋯×‹›✓#−]/);
+  const libraryLink = page.getByRole("link", { name: "Library", exact: true });
+  const highlight = page.getByRole("button", { name: /^Highlight tool/ });
+  expect(await libraryLink.evaluate((el) => getComputedStyle(el).color)).toBe(await highlight.evaluate((el) => getComputedStyle(el).color));
+});
+
+test("the reader scrolls in one place with no scrollbar; the dial and W/A/S/D or arrows move through pages", async ({ page }) => {
+  await openPaper(page);
+  const layout = await page.evaluate(() => {
+    const v = document.querySelector<HTMLElement>(".viewer-scroll")!;
+    return { pageScrolls: document.scrollingElement!.scrollHeight > window.innerHeight + 1, gutter: v.offsetWidth - v.clientWidth };
+  });
+  expect(layout.pageScrolls).toBe(false);
+  expect(layout.gutter).toBe(0);
+
+  const dial = page.getByTestId("page-dial");
+  await expect(dial).toHaveAttribute("aria-valuenow", "1");
+  await page.locator("body").click({ position: { x: 5, y: 5 } }).catch(() => {});
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  for (const [key, expected] of [["d", "2"], ["ArrowRight", "3"], ["a", "2"], ["ArrowLeft", "1"]] as const) {
+    await page.keyboard.press(key);
+    await expect(dial).toHaveAttribute("aria-valuenow", expected);
+  }
+  const top = () => page.locator(".viewer-scroll").evaluate((el) => el.scrollTop);
+  const before = await top();
+  await page.keyboard.press("s");
+  await page.keyboard.press("ArrowDown");
+  const after = await top();
+  expect(after).toBeGreaterThan(before);
+  await page.keyboard.press("w");
+  expect(await top()).toBeLessThan(after);
+
+  // Turning the dial clockwise a quarter turn clicks forward several pages.
+  const box = (await dial.boundingBox())!;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const r = box.width * 0.4;
+  await page.mouse.move(cx, cy - r);
+  await page.mouse.down();
+  for (let deg = 0; deg <= 100; deg += 5) {
+    const a = (deg * Math.PI) / 180;
+    await page.mouse.move(cx + Math.sin(a) * r, cy - Math.cos(a) * r);
+  }
+  await page.mouse.up();
+  expect(Number(await dial.getAttribute("aria-valuenow"))).toBeGreaterThan(2);
+
+  // A click without turning opens the page field.
+  await dial.click();
+  const field = page.getByRole("textbox", { name: "Page" });
+  await field.fill("10");
+  await field.press("Enter");
+  await expect(dial).toHaveAttribute("aria-valuenow", "10");
+});
+
+test("cite the open paper from doi.org in a style or as BibTeX", async ({ page }) => {
+  await mockDoi(page);
+  await openPaper(page);
+  await page.getByRole("button", { name: "Cite", exact: true }).click();
+  const panel = page.getByTestId("cite-panel");
+  await expect(panel.getByTestId("cite-output")).toHaveValue("MOCK apa citation for 10.1038/s41467-022-33093-3");
+  await panel.getByLabel("Format").selectOption("bibtex");
+  await expect(panel.getByTestId("cite-output")).toHaveValue(/^@article\{mock_/);
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toHaveCount(0);
+});
+
+test("without doi.org the citation falls back to the PDF's own metadata, and says so", async ({ page }) => {
+  await page.route("https://doi.org/**", (route) => route.abort());
+  await openPaper(page);
+  await page.getByRole("button", { name: "Cite", exact: true }).click();
+  const panel = page.getByTestId("cite-panel");
+  await expect(panel.getByTestId("cite-output")).toHaveValue(/Uddin.*et al\..*2022.*https:\/\/doi\.org\/10\.1038\/s41467-022-33093-3/);
+  await expect(panel.getByRole("status")).toContainText("Couldn't reach doi.org");
+});
+
+test("select papers in the library, then export or cite them together", async ({ page }) => {
+  await mockDoi(page);
+  await openLibrary(page);
+  await expect(page.getByRole("toolbar", { name: "Selected papers" })).toHaveCount(0);
+  await page.getByLabel("Select all").check();
+  const bar = page.getByRole("toolbar", { name: "Selected papers" });
+  await expect(bar).toContainText("2 selected");
+
+  await bar.getByRole("button", { name: "Export" }).click();
+  const output = page.getByTestId("cite-panel").getByTestId("cite-output");
+  await expect(output).toHaveValue(/@article\{mock_[\s\S]*@article\{mock_/);
+  await page.getByTestId("cite-panel").getByRole("button", { name: "Close" }).click();
+
+  await bar.getByRole("button", { name: "Cite" }).click();
+  await expect(output).toHaveValue(/MOCK apa citation for 10\.1038\/s41467-0\d\d-[\s\S]*MOCK apa citation for 10\.1038/);
+  await page.getByTestId("cite-panel").getByRole("button", { name: "Close" }).click();
+
+  await bar.getByRole("button", { name: "Clear selection" }).click();
+  await expect(bar).toHaveCount(0);
 });

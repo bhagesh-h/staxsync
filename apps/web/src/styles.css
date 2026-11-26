@@ -70,6 +70,19 @@ body,
   margin: 0;
 }
 
+/* The page itself never scrolls: each screen scrolls inside its own area (one scrollbar at most). */
+html,
+body {
+  overflow: hidden;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
 body,
 .paper {
   background-color: var(--bg);
@@ -121,13 +134,14 @@ textarea {
 
 /* Controls ---------------------------------------------------------------------------- */
 
+/* Every button is orange text on paper. */
 .btn {
   min-height: var(--control);
   min-width: var(--control);
   padding: 0 var(--s2);
   border: 1px solid transparent;
   background: transparent;
-  color: var(--fg);
+  color: var(--accent);
   cursor: pointer;
   white-space: nowrap;
   text-decoration: none;
@@ -363,8 +377,67 @@ textarea.field {
 
 .papers {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 0 var(--s4) var(--s5);
+}
+
+.filters,
+.selection-bar {
+  gap: var(--s1) var(--s2);
+  padding-top: var(--s1);
+  padding-bottom: var(--s1);
+}
+
+.selection-bar {
+  background-color: var(--mark);
+}
+
+.tag-filter .count {
+  margin-left: var(--s1);
+  color: var(--muted);
+}
+
+.tag-filter.is-excluded {
+  text-decoration: line-through;
+}
+
+.select-all {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--bar);
+  border-bottom: 1px solid var(--muted);
+  cursor: pointer;
+}
+
+.paper-row {
+  display: flex;
+  gap: var(--s3);
+  align-items: flex-start;
+}
+
+.paper-row .row-check {
+  margin-top: 3px;
+  flex: none;
+}
+
+.paper-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.paper-row.is-selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tag-chip {
+  min-height: 28px;
+  padding: 0 var(--s1);
+}
+
+.tag-chip:hover {
+  text-decoration: line-through;
 }
 
 .filter-summary {
@@ -480,9 +553,125 @@ textarea.field {
   position: absolute;
   inset: 0;
   overflow: auto;
+  /* No scrollbar: the page dial, keys (W/S, A/D, arrows), wheel and touch move through the paper. */
+  scrollbar-width: none;
   background-color: var(--bg);
   background-image: var(--grain);
   touch-action: pan-x pan-y pinch-zoom;
+}
+
+.viewer-scroll::-webkit-scrollbar,
+.reader > .bar::-webkit-scrollbar {
+  display: none;
+}
+
+.reader > .bar {
+  scrollbar-width: none;
+}
+
+/* Page dial ------------------------------------------------------------------------------ */
+
+.dial-wrap {
+  position: absolute;
+  right: max(var(--s3), env(safe-area-inset-right));
+  bottom: max(var(--s4), env(safe-area-inset-bottom));
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.dial {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background-color: var(--bg);
+  background-image: var(--grain);
+  border: 1px solid var(--muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+}
+
+.dial:active {
+  cursor: grabbing;
+}
+
+.dial:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dial svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.dial-face {
+  fill: none;
+}
+
+.dial-tick {
+  stroke: var(--muted);
+  stroke-width: 1.2;
+}
+
+.dial-pointer {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.dial-page {
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.dial-jump {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1) var(--s2);
+  background-color: var(--bg);
+  background-image: var(--grain);
+  border: 1px solid var(--muted);
+}
+
+/* Cite panel ----------------------------------------------------------------------------- */
+
+.floating.cite-panel {
+  top: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 31;
+  width: min(620px, calc(100vw - 16px));
+  padding: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.cite-panel .row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.cite-panel .cite-output {
+  min-height: 200px;
+  font-family: var(--font);
+  white-space: pre-wrap;
 }
 
 .viewer-scroll.tool-draw .textLayer {

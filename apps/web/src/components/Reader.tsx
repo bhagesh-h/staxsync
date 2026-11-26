@@ -16,6 +16,8 @@ import { loadPdfjs, paperUrl } from "../pdf/pdfjs";
 import { anchorForRange, caretAt, clientToPdf, pdfUnitsPerPixel, rangeBetween, rangeToQuads, snapToWords, type Caret, type PageRef } from "../pdf/selection";
 import { AnnotationPopover } from "./AnnotationPopover";
 import { AnnotationSidebar } from "./AnnotationSidebar";
+import { CitePanel } from "./CitePanel";
+import { PageDial } from "./PageDial";
 import { ColorMenu } from "./ColorMenu";
 import { OutlineTree, type OutlineNode } from "./OutlineTree";
 
@@ -91,7 +93,7 @@ export function Reader({ paper, setLibrary }: Props) {
   const [error, setError] = useState("");
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
-  const [pageInput, setPageInput] = useState("1");
+  const [citeOpen, setCiteOpen] = useState(false);
   const [scalePct, setScalePct] = useState(100);
   const [outline, setOutline] = useState<OutlineNode[] | null>(null);
   const [leftOpen, setLeftOpen] = useState(false);
@@ -393,7 +395,6 @@ export function Reader({ paper, setLibrary }: Props) {
         eventBus.on("textlayerrendered", (e: { pageNumber: number }) => drawPage(e.pageNumber - 1));
         eventBus.on("pagechanging", (e: { pageNumber: number }) => {
           setPageNumber(e.pageNumber);
-          setPageInput(labelsRef.current?.[e.pageNumber - 1] ?? String(e.pageNumber));
         });
         eventBus.on("scalechanging", (e: { scale: number }) => setScalePct(Math.round(e.scale * 100)));
         eventBus.on("updateviewarea", (e: { location?: { pageNumber: number; top: number; left: number } }) => {
@@ -707,10 +708,16 @@ export function Reader({ paper, setLibrary }: Props) {
     v.currentPageNumber = Math.max(1, Math.min(v.pagesCount, Math.round(n)));
   };
 
-  const goToLabel = (value: string) => {
-    const labels = labelsRef.current;
-    const idx = labels ? labels.indexOf(value.trim()) : -1;
-    goToPage(idx >= 0 ? idx + 1 : Number(value));
+  /** W/S and the up/down arrows: scroll a quarter of the view (instantly, no animation). */
+  const scrollBy = (direction: 1 | -1) => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop += direction * Math.round(el.clientHeight * 0.25);
+  };
+
+  /** A/D and the left/right arrows: previous/next page. */
+  const stepPage = (direction: 1 | -1) => {
+    const v = pdfViewerRef.current;
+    if (v) goToPage(v.currentPageNumber + direction);
   };
 
   const zoomIn = () => pdfViewerRef.current?.increaseScale();
@@ -763,6 +770,7 @@ export function Reader({ paper, setLibrary }: Props) {
   };
 
   const dismiss = () => {
+    if (citeOpen) return setCiteOpen(false);
     if (popover) return setPopover(null);
     if (toolColorsAt) return setToolColorsAt(null);
     if (selMenu) return setSelMenu(null);
@@ -786,8 +794,8 @@ export function Reader({ paper, setLibrary }: Props) {
 
   // ---- commands ---------------------------------------------------------------------
 
-  const actions = useRef({ createFromSelection, commentOnSelection, selectTool, pickColor, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection });
-  actions.current = { createFromSelection, commentOnSelection, selectTool, pickColor, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection };
+  const actions = useRef({ createFromSelection, commentOnSelection, selectTool, pickColor, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection, scrollBy, stepPage });
+  actions.current = { createFromSelection, commentOnSelection, selectTool, pickColor, undo, redo, openFind, zoomIn, zoomOut, fitWidth, exportMarkdown, dismiss, deleteAnnotation, hasSelection, scrollBy, stepPage };
 
   const commands: Command[] = useMemo(() => {
     const act = () => actions.current;
@@ -802,7 +810,12 @@ export function Reader({ paper, setLibrary }: Props) {
         run: () => act().pickColor(c.color),
       })),
       { id: "reader_tool_select", title: "Select tool", keys: ["v"], run: () => act().selectTool("select") },
-      { id: "reader_tool_area", title: "Area tool", keys: ["a"], run: () => act().selectTool("area") },
+      { id: "reader_tool_area", title: "Area tool", keys: ["r"], run: () => act().selectTool("area") },
+      { id: "reader_view_up", title: "Scroll up", keys: ["w", "arrowup"], run: () => act().scrollBy(-1) },
+      { id: "reader_view_down", title: "Scroll down", keys: ["s", "arrowdown"], run: () => act().scrollBy(1) },
+      { id: "reader_page_previous", title: "Previous page", keys: ["a", "arrowleft"], run: () => act().stepPage(-1) },
+      { id: "reader_page_next", title: "Next page", keys: ["d", "arrowright"], run: () => act().stepPage(1) },
+      { id: "reader_paper_cite", title: "Cite this paper", run: () => setCiteOpen(true) },
       { id: "reader_tool_note", title: "Note tool", keys: ["n"], run: () => act().selectTool("note") },
       { id: "reader_tool_pen", title: "Pen tool", keys: ["p"], run: () => act().selectTool("pen") },
       { id: "reader_tool_eraser", title: "Eraser tool", keys: ["e"], run: () => act().selectTool("eraser") },
@@ -813,7 +826,7 @@ export function Reader({ paper, setLibrary }: Props) {
       { id: "reader_zoom_in", title: "Zoom in", keys: ["+", "=", "mod+="], run: () => act().zoomIn() },
       { id: "reader_zoom_out", title: "Zoom out", keys: ["-", "mod+-"], run: () => act().zoomOut() },
       { id: "reader_zoom_fit", title: "Fit width", keys: ["0"], run: () => act().fitWidth() },
-      { id: "reader_panel_annotations", title: "Show annotations", keys: ["s"], run: () => (setRightOpen((o) => !o), setRightTab("annotations")) },
+      { id: "reader_panel_annotations", title: "Show annotations", keys: ["l"], run: () => (setRightOpen((o) => !o), setRightTab("annotations")) },
       { id: "reader_panel_note", title: "Show paper note", run: () => (setRightOpen(true), setRightTab("note")) },
       { id: "reader_panel_outline", title: "Show outline", keys: ["o"], run: () => setLeftOpen((o) => !o) },
       { id: "reader_layout_twoup", title: "Toggle two-page layout", run: () => setTwoUp((t) => !t) },
@@ -858,7 +871,7 @@ export function Reader({ paper, setLibrary }: Props) {
         <>
           <header className="bar">
             <a className="btn btn-nav" href="#/" style={{ display: "inline-flex", alignItems: "center" }}>
-              ← Library
+              Library
             </a>
             <span className="reader-title" title={title}>
               {title}
@@ -869,33 +882,14 @@ export function Reader({ paper, setLibrary }: Props) {
               </a>
             )}
             <span className="spacer" />
-            <button className="btn btn-nav" aria-label="Previous page" disabled={pageNumber <= 1} onClick={() => goToPage(pageNumber - 1)}>
-              ‹
-            </button>
-            <input
-              className="field page-input"
-              aria-label="Page"
-              value={pageInput}
-              onChange={(e) => setPageInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && goToLabel(pageInput)}
-              onBlur={() => setPageInput(pageLabel(pageNumber - 1))}
-              inputMode="numeric"
-            />
-            <span className="meta" data-testid="page-count">
-              of {numPages}
-            </span>
-            <button className="btn btn-nav" aria-label="Next page" disabled={pageNumber >= numPages} onClick={() => goToPage(pageNumber + 1)}>
-              ›
-            </button>
-            <span className="sep" />
-            <button className="btn btn-nav" aria-label="Zoom out" onClick={zoomOut}>
-              −
+            <button className="btn btn-nav" onClick={zoomOut}>
+              Zoom out
             </button>
             <span className="meta" style={{ minWidth: "4ch", textAlign: "center" }} aria-label="Zoom level">
               {scalePct}%
             </span>
-            <button className="btn btn-nav" aria-label="Zoom in" onClick={zoomIn}>
-              +
+            <button className="btn btn-nav" onClick={zoomIn}>
+              Zoom in
             </button>
             <button className="btn btn-nav" onClick={fitWidth}>
               Fit width
@@ -910,33 +904,36 @@ export function Reader({ paper, setLibrary }: Props) {
             <button className="btn btn-nav" aria-pressed={rightOpen} onClick={() => setRightOpen((o) => !o)}>
               Notes {annotations.length > 0 ? annotations.length : ""}
             </button>
+            <button className="btn btn-nav" aria-pressed={citeOpen} onClick={() => setCiteOpen(true)}>
+              Cite
+            </button>
             <button className="btn btn-nav" onClick={() => setReadMode(true)}>
               Read
             </button>
-            <button className="btn btn-nav" aria-haspopup="menu" aria-expanded={menuOpen} aria-label="More" onClick={() => setMenuOpen((o) => !o)}>
-              ⋯
+            <button className="btn btn-nav" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
+              More
             </button>
             {menuOpen && (
               <div className="menu floating" role="menu" onClick={() => setMenuOpen(false)}>
                 <button className="btn" role="menuitemcheckbox" aria-checked={twoUp} onClick={() => setTwoUp((t) => !t)}>
-                  {twoUp ? "✓ " : ""}Two pages side by side
+                  Two pages side by side
                 </button>
                 <button className="btn" role="menuitem" onClick={toggleTheme}>
                   {theme === "dark" ? "Light theme" : "Dark theme"}
                 </button>
                 {theme === "dark" && (
                   <button className="btn" role="menuitemcheckbox" aria-checked={invert} onClick={() => setInvert((i) => !i)}>
-                    {invert ? "✓ " : ""}Dark pages
+                    Dark pages
                   </button>
                 )}
                 <button className="btn" role="menuitemcheckbox" aria-checked={fingerDraws} onClick={() => setFingerDraws((f) => !f)}>
-                  {fingerDraws ? "✓ " : ""}Fingers draw (not only stylus)
+                  Fingers draw (not only stylus)
                 </button>
                 <button className="btn" role="menuitem" onClick={exportMarkdown}>
                   Export annotations (Markdown)
                 </button>
                 <span className="meta" style={{ padding: "4px 8px" }}>
-                  All commands: Ctrl/⌘ K
+                  All commands: Ctrl or Cmd K
                 </span>
               </div>
             )}
@@ -960,7 +957,7 @@ export function Reader({ paper, setLibrary }: Props) {
                   }}
                 >
                   <span className={`dot c-${color}`} aria-hidden="true" />
-                  Highlight ▾
+                  Highlight
                 </button>
               ) : (
                 <button key={t.tool} className="btn" aria-pressed={tool === t.tool} title={`${t.label} (${t.key.toUpperCase()})`} onClick={() => selectTool(t.tool)}>
@@ -1018,8 +1015,8 @@ export function Reader({ paper, setLibrary }: Props) {
             <div className="bar">
               <strong>Outline</strong>
               <span className="spacer" />
-              <button className="btn" aria-label="Close outline" onClick={() => setLeftOpen(false)}>
-                ×
+              <button className="btn" onClick={() => setLeftOpen(false)}>
+                Close
               </button>
             </div>
             <div className="panel-body">
@@ -1042,6 +1039,7 @@ export function Reader({ paper, setLibrary }: Props) {
           <div ref={scrollRef} className={`viewer-scroll ${toolClass}`} data-testid="viewer" data-tool={tool} aria-label="Document" tabIndex={-1}>
             <div ref={viewerDivRef} className="pdfViewer" />
           </div>
+          {status === "ready" && numPages > 0 && <PageDial page={pageNumber} count={numPages} label={pageLabel} onChange={goToPage} />}
           {status === "loading" && <p className="status">Opening…</p>}
           {status === "error" && <p className="status">Couldn't open this PDF: {error}</p>}
           {readMode && (
@@ -1049,9 +1047,7 @@ export function Reader({ paper, setLibrary }: Props) {
               <button className="btn btn-nav read-mode-exit" onClick={() => setReadMode(false)}>
                 Exit read mode
               </button>
-              <span className="read-mode-counter">
-                {pageLabel(pageNumber - 1)} / {numPages}
-              </span>
+
             </>
           )}
         </div>
@@ -1086,7 +1082,7 @@ export function Reader({ paper, setLibrary }: Props) {
             onClick={() => showSelColors(!selColorsOpen)}
           >
             <span className={`dot c-${color}`} aria-hidden="true" />
-            Highlight ▾
+            Highlight
           </button>
           <button className="btn" onClick={() => createFromSelection("underline")}>
             Underline
@@ -1125,6 +1121,8 @@ export function Reader({ paper, setLibrary }: Props) {
           onClose={() => setPopover(null)}
         />
       )}
+
+      {citeOpen && <CitePanel papers={[paper]} mode="cite" onClose={() => setCiteOpen(false)} />}
 
       {saveFailed && (
         <div className="floating" role="alert" style={{ left: 8, bottom: 8, padding: 8 }}>

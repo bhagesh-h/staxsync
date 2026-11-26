@@ -20,6 +20,7 @@ import {
 import { loadPaper, loadPreference, savePreference, type LibraryDoc } from "../lib/storage";
 import type { PaperRecord, ReadingStatus, Tag } from "../lib/types";
 import { readPaperMeta } from "../pdf/metadata";
+import { CitePanel } from "./CitePanel";
 
 interface Props {
   library: LibraryDoc;
@@ -36,7 +37,7 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 const STATUSES: { key: ReadingStatus | "any"; label: string }[] = [
-  { key: "any", label: "All papers" },
+  { key: "any", label: "All" },
   { key: "unread", label: "Unread" },
   { key: "reading", label: "Reading" },
   { key: "read", label: "Read" },
@@ -125,24 +126,56 @@ export function Library({ library, setLibrary, missingPaper }: Props) {
   const tagName = (id: string) => library.tags.find((t) => t.id === id)?.name ?? "?";
   const filtering = filter.include.length + filter.exclude.length > 0 || filter.untagged || filter.status !== "any" || filter.query.trim() !== "";
 
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [citeMode, setCiteMode] = useState<"cite" | "export" | null>(null);
+  const [bulkTag, setBulkTag] = useState("");
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
   const commands: Command[] = useMemo(
     () => [
       { id: "library_search_focus", title: "Search library", keys: ["/"], run: () => searchRef.current?.focus() },
       { id: "library_filter_clear", title: "Clear filters", run: () => setFilter(emptyFilter) },
+      { id: "library_selection_clear", title: "Clear selection", run: () => setSelected(new Set()) },
     ],
     [],
   );
   useCommands(commands);
 
-  const summary = [
-    filter.include.length ? filter.include.map(tagName).join(filter.mode === "all" ? " AND " : " OR ") : "",
-    filter.exclude.length ? `NOT ${filter.exclude.map(tagName).join(", ")}` : "",
-    filter.untagged ? "untagged" : "",
-    filter.status !== "any" ? filter.status : "",
-    filter.query.trim() ? `“${filter.query.trim()}”` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const usedTags = tagsByName.filter((t) => all.some((p) => p.tags.includes(t.id)));
+  const shownSelected = shown.filter((p) => selected.has(p.id));
+  const allShownSelected = shown.length > 0 && shownSelected.length === shown.length;
+  const selectedPapers = sortPapers(all.filter((p) => selected.has(p.id)), sort);
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = shownSelected.length > 0 && !allShownSelected;
+  });
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  /** Removing a tag from its last paper removes the tag itself. */
+  const removeTag = (paperId: string, tagId: string) =>
+    setLibrary((doc) => {
+      const next = removeTagFromPaper(doc, paperId, tagId);
+      return Object.values(next.papers).some((p) => p.tags.includes(tagId)) ? next : deleteTag(next, tagId);
+    });
+
+  const addBulkTag = () => {
+    const names = bulkTag.split(",").map((n) => n.trim()).filter(Boolean);
+    if (!names.length) return;
+    setLibrary((doc) => {
+      let next = doc;
+      for (const id of selected) for (const name of names) next = addTagToPaper(next, id, name);
+      return next;
+    });
+    announce(`Tagged ${selected.size} paper${selected.size === 1 ? "" : "s"}`);
+    setBulkTag("");
+  };
 
   return (
     <div className="app">
@@ -169,105 +202,129 @@ export function Library({ library, setLibrary, missingPaper }: Props) {
           ))}
         </select>
         <span className="spacer" />
-        <button className="btn btn-nav" onClick={toggleTheme}>
+        <button className="btn" onClick={toggleTheme}>
           {theme === "dark" ? "Light" : "Dark"}
         </button>
       </header>
 
-      <div className="library">
-        <nav className="rail" aria-label="Filters">
-          <h2>Status</h2>
+      <div className="bar filters" role="toolbar" aria-label="Filters">
+        <label className="meta" htmlFor="status">
+          Status
+        </label>
+        <select id="status" className="field" value={filter.status} onChange={(e) => setFilter((f) => ({ ...f, status: e.target.value as LibraryFilter["status"] }))}>
           {STATUSES.map((s) => (
-            <div className="rail-row" key={s.key}>
-              <button className="btn" aria-pressed={filter.status === s.key} onClick={() => setFilter((f) => ({ ...f, status: s.key }))}>
-                {s.label}
-              </button>
-            </div>
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
           ))}
-
-          <h2>Tags</h2>
-          <div className="rail-row" style={{ marginBottom: 4 }}>
-            <span className="meta">Match</span>
-            <span className="segmented" role="group" aria-label="Tag match mode">
-              <button className="btn" aria-pressed={filter.mode === "all"} onClick={() => setFilter((f) => ({ ...f, mode: "all" }))}>
-                All
-              </button>
-              <button className="btn" aria-pressed={filter.mode === "any"} onClick={() => setFilter((f) => ({ ...f, mode: "any" }))}>
-                Any
-              </button>
-            </span>
-          </div>
-          {tagsByName.length === 0 && <p className="meta">No tags yet. Add one to a paper.</p>}
-          {tagsByName.map((t) => (
-            <TagFilterRow key={t.id} tag={t} count={counts.get(t.id) ?? 0} filter={filter} onCycle={() => setFilter((f) => cycleTagFilter(f, t.id))} onDelete={() => {
-              const used = all.filter((p) => p.tags.includes(t.id)).length;
-              if (used === 0 || window.confirm(`Remove tag “${t.name}” from ${used} paper${used === 1 ? "" : "s"}?`)) {
-                setLibrary((doc) => deleteTag(doc, t.id));
-                setFilter((f) => ({ ...f, include: f.include.filter((x) => x !== t.id), exclude: f.exclude.filter((x) => x !== t.id) }));
-                announce(`Tag ${t.name} deleted`);
-              }
-            }} />
-          ))}
-          <div className="rail-row">
-            <button className="btn" aria-pressed={filter.untagged} onClick={() => setFilter((f) => ({ ...f, untagged: !f.untagged, include: f.untagged ? f.include : [] }))}>
-              Untagged
+        </select>
+        <span className="meta">Tags</span>
+        {usedTags.map((t) => {
+          const state = filter.include.includes(t.id) ? "included" : filter.exclude.includes(t.id) ? "excluded" : "not filtered";
+          return (
+            <button
+              key={t.id}
+              className={`btn tag-filter ${state === "included" ? "is-active" : ""} ${state === "excluded" ? "is-excluded" : ""}`}
+              aria-label={`${t.name}, ${state}`}
+              title="Click: include, exclude, off"
+              onClick={() => setFilter((f) => cycleTagFilter(f, t.id))}
+            >
+              {t.name}
+              <span className="count">{counts.get(t.id) ?? 0}</span>
             </button>
-            <span className="count">{all.filter((p) => p.tags.length === 0).length}</span>
-          </div>
-          <p className="meta">Click a tag: include, then exclude, then off.</p>
-        </nav>
-
-        <main className="papers" aria-label="Papers">
-          <div className="filter-summary">
-            <span>
-              {shown.length} of {all.length} papers{summary ? ` · ${summary}` : ""}
-            </span>
-            {filtering && (
-              <button className="btn" onClick={() => setFilter(emptyFilter)}>
-                Clear
-              </button>
-            )}
-          </div>
-          {missingPaper && <p className="empty">That paper isn't in the library.</p>}
-          {loadError && <p className="empty">{loadError}</p>}
-          {loading && !loadError && <p className="empty">Loading papers…</p>}
-          {!loading && !loadError && all.length === 0 && <p className="empty">No PDFs found in the papers folder.</p>}
-          {!loading && all.length > 0 && shown.length === 0 && <p className="empty">No papers match these filters.</p>}
-          {shown.map((p) => (
-            <PaperRow
-              key={p.id}
-              paper={p}
-              tags={library.tags}
-              annotationCount={loadPaper(p.id).annotations.length}
-              onAddTag={(name) => setLibrary((doc) => addTagToPaper(doc, p.id, name))}
-              onRemoveTag={(tagId) => setLibrary((doc) => removeTagFromPaper(doc, p.id, tagId))}
-              onStatus={(s) => setLibrary((doc) => setStatus(doc, p.id, s))}
-            />
-          ))}
-        </main>
+          );
+        })}
+        <button className="btn" aria-pressed={filter.untagged} onClick={() => setFilter((f) => ({ ...f, untagged: !f.untagged, include: f.untagged ? f.include : [] }))}>
+          Untagged
+        </button>
+        {filter.include.length > 1 && (
+          <button className="btn" onClick={() => setFilter((f) => ({ ...f, mode: f.mode === "all" ? "any" : "all" }))}>
+            {filter.mode === "all" ? "Match all" : "Match any"}
+          </button>
+        )}
+        <span className="spacer" />
+        <span className="meta">
+          {shown.length} of {all.length}
+        </span>
+        {filtering && (
+          <button className="btn" onClick={() => setFilter(emptyFilter)}>
+            Clear filters
+          </button>
+        )}
       </div>
-    </div>
-  );
-}
 
-function TagFilterRow({ tag, count, filter, onCycle, onDelete }: { tag: Tag; count: number; filter: LibraryFilter; onCycle: () => void; onDelete: () => void }) {
-  const state = filter.include.includes(tag.id) ? "include" : filter.exclude.includes(tag.id) ? "exclude" : "off";
-  const mark = state === "include" ? "+ " : state === "exclude" ? "− " : "";
-  return (
-    <div className="rail-row">
-      <button
-        className={`btn ${state === "include" ? "is-active" : ""}`}
-        aria-label={`${tag.name}, ${state === "off" ? "not filtered" : state === "include" ? "included" : "excluded"}`}
-        onClick={onCycle}
-        style={state === "exclude" ? { textDecoration: "line-through" } : undefined}
-      >
-        {mark}
-        {tag.name}
-      </button>
-      <span className="count">{count}</span>
-      <button className="btn" aria-label={`Delete tag ${tag.name}`} title="Delete tag" onClick={onDelete}>
-        ×
-      </button>
+      {selected.size > 0 && (
+        <div className="bar selection-bar" role="toolbar" aria-label="Selected papers">
+          <span>{selected.size} selected</span>
+          <button className="btn" onClick={() => setCiteMode("cite")}>
+            Cite
+          </button>
+          <button className="btn" onClick={() => setCiteMode("export")}>
+            Export
+          </button>
+          <input
+            className="field tag-input"
+            placeholder="Add tag"
+            aria-label="Add tag to selected papers"
+            list="all-tags"
+            value={bulkTag}
+            onChange={(e) => setBulkTag(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addBulkTag()}
+          />
+          <span className="spacer" />
+          <button className="btn" onClick={() => setSelected(new Set())}>
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      <main className="papers" aria-label="Papers">
+        {shown.length > 0 && (
+          <label className="select-all meta">
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allShownSelected}
+              onChange={() =>
+                setSelected((prev) => {
+                  const next = new Set(prev);
+                  for (const p of shown) {
+                    if (allShownSelected) next.delete(p.id);
+                    else next.add(p.id);
+                  }
+                  return next;
+                })
+              }
+            />
+            Select all
+          </label>
+        )}
+        {missingPaper && <p className="empty">That paper isn't in the library.</p>}
+        {loadError && <p className="empty">{loadError}</p>}
+        {loading && !loadError && <p className="empty">Loading papers</p>}
+        {!loading && !loadError && all.length === 0 && <p className="empty">No PDFs found in the papers folder.</p>}
+        {!loading && all.length > 0 && shown.length === 0 && <p className="empty">No papers match these filters.</p>}
+        {shown.map((p) => (
+          <PaperRow
+            key={p.id}
+            paper={p}
+            tags={library.tags}
+            selected={selected.has(p.id)}
+            onToggle={() => toggle(p.id)}
+            annotationCount={loadPaper(p.id).annotations.length}
+            onAddTag={(name) => setLibrary((doc) => addTagToPaper(doc, p.id, name))}
+            onRemoveTag={(tagId) => removeTag(p.id, tagId)}
+            onStatus={(s) => setLibrary((doc) => setStatus(doc, p.id, s))}
+          />
+        ))}
+        <datalist id="all-tags">
+          {tagsByName.map((t) => (
+            <option key={t.id} value={t.name} />
+          ))}
+        </datalist>
+      </main>
+
+      {citeMode && selectedPapers.length > 0 && <CitePanel papers={selectedPapers} mode={citeMode} onClose={() => setCiteMode(null)} />}
     </div>
   );
 }
@@ -275,6 +332,8 @@ function TagFilterRow({ tag, count, filter, onCycle, onDelete }: { tag: Tag; cou
 function PaperRow({
   paper,
   tags,
+  selected,
+  onToggle,
   annotationCount,
   onAddTag,
   onRemoveTag,
@@ -282,76 +341,73 @@ function PaperRow({
 }: {
   paper: PaperRecord;
   tags: Tag[];
+  selected: boolean;
+  onToggle: () => void;
   annotationCount: number;
   onAddTag: (name: string) => void;
   onRemoveTag: (tagId: string) => void;
   onStatus: (s: ReadingStatus) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const listId = `tags-${paper.id}`;
   const m = paper.meta;
+  const title = m?.title ?? paper.file;
   const commit = () => {
     for (const name of draft.split(",")) if (name.trim()) onAddTag(name);
     setDraft("");
   };
   return (
-    <article className="paper-row" data-testid="paper-row" data-paper-id={paper.id}>
-      <a className="link paper-title" href={`#/paper/${encodeURIComponent(paper.id)}`}>
-        {m?.title ?? paper.file}
-      </a>
-      <div className="paper-line meta">
-        {authorsLine(paper) && <span>{authorsLine(paper)}</span>}
-        {m?.journal && <span>{m.journal}</span>}
-        {m?.year && <span>{m.year}</span>}
-        {m?.pages ? <span>{m.pages} pages</span> : null}
-        {annotationCount > 0 && <span>{annotationCount} annotation{annotationCount === 1 ? "" : "s"}</span>}
-      </div>
-      {m?.doi && (
-        <div className="paper-line">
-          <a className="doi" href={`https://doi.org/${m.doi}`} target="_blank" rel="noopener noreferrer" data-testid="paper-doi">
-            doi:{m.doi}
-          </a>
+    <article className={`paper-row ${selected ? "is-selected" : ""}`} data-testid="paper-row" data-paper-id={paper.id}>
+      <input type="checkbox" className="row-check" checked={selected} onChange={onToggle} aria-label={`Select ${title}`} />
+      <div className="paper-body">
+        <a className="link paper-title" href={`#/paper/${encodeURIComponent(paper.id)}`}>
+          {title}
+        </a>
+        <div className="paper-line meta">
+          {authorsLine(paper) && <span>{authorsLine(paper)}</span>}
+          {m?.journal && <span>{m.journal}</span>}
+          {m?.year && <span>{m.year}</span>}
+          {m?.pages ? <span>{m.pages} pages</span> : null}
+          {annotationCount > 0 && <span>{annotationCount} annotation{annotationCount === 1 ? "" : "s"}</span>}
         </div>
-      )}
-      <div className="paper-line">
-        {paper.tags.map((id) => {
-          const name = tags.find((t) => t.id === id)?.name ?? "?";
-          return (
-            <span className="tag" key={id} data-testid="paper-tag">
-              #{name}
-              <button className="btn" aria-label={`Remove tag ${name}`} onClick={() => onRemoveTag(id)}>
-                ×
+        {m?.doi && (
+          <div className="paper-line">
+            <a className="doi" href={`https://doi.org/${m.doi}`} target="_blank" rel="noopener noreferrer" data-testid="paper-doi">
+              doi:{m.doi}
+            </a>
+          </div>
+        )}
+        <div className="paper-line">
+          {paper.tags.map((id) => {
+            const name = tags.find((t) => t.id === id)?.name ?? "";
+            return (
+              <button key={id} className="btn tag-chip" data-testid="paper-tag" aria-label={`Remove tag ${name}`} title="Remove tag" onClick={() => onRemoveTag(id)}>
+                {name}
               </button>
-            </span>
-          );
-        })}
-        <input
-          className="field tag-input"
-          placeholder="+ tag"
-          aria-label={`Add tag to ${m?.title ?? paper.file}`}
-          list={listId}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === ",") {
-              e.preventDefault();
-              commit();
-            }
-            if (e.key === "Backspace" && draft === "" && paper.tags.length > 0) onRemoveTag(paper.tags[paper.tags.length - 1] as string);
-          }}
-          onBlur={commit}
-        />
-        <datalist id={listId}>
-          {tags.filter((t) => !paper.tags.includes(t.id)).map((t) => (
-            <option key={t.id} value={t.name} />
-          ))}
-        </datalist>
-        <span className="spacer" style={{ flex: 1 }} />
-        <select className="field" aria-label="Reading status" value={paper.status} onChange={(e) => onStatus(e.target.value as ReadingStatus)} style={{ minHeight: 28 }}>
-          <option value="unread">Unread</option>
-          <option value="reading">Reading</option>
-          <option value="read">Read</option>
-        </select>
+            );
+          })}
+          <input
+            className="field tag-input"
+            placeholder="Add tag"
+            aria-label={`Add tag to ${title}`}
+            list="all-tags"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                commit();
+              }
+              if (e.key === "Backspace" && draft === "" && paper.tags.length > 0) onRemoveTag(paper.tags[paper.tags.length - 1] as string);
+            }}
+            onBlur={commit}
+          />
+          <span style={{ flex: 1 }} />
+          <select className="field" aria-label="Reading status" value={paper.status} onChange={(e) => onStatus(e.target.value as ReadingStatus)}>
+            <option value="unread">Unread</option>
+            <option value="reading">Reading</option>
+            <option value="read">Read</option>
+          </select>
+        </div>
       </div>
     </article>
   );

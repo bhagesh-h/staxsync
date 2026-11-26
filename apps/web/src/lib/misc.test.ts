@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { COMMAND_ID, CommandRegistry, normaliseKey } from "./commands";
 import { History } from "./history";
+import { citekey, localCitation } from "./cite";
 import { annotationsToMarkdown } from "./markdown";
 import type { Annotation } from "./types";
 import { readVersioned } from "./versioned";
@@ -66,5 +67,27 @@ describe("markdown export", () => {
     expect(md).toContain("> first");
     expect(md).toContain("why");
     expect(md).toContain("Highlight (yellow)");
+  });
+});
+
+describe("basic citations from PDF metadata", () => {
+  const meta = { title: "Clonal hematopoiesis and risk", authors: ["Md Mesbah Uddin"], moreAuthors: true, year: 2022, journal: "Nature Communications", doi: "10.1038/x" };
+
+  it("APA names the first author with initials, marks more authors and links the DOI", () => {
+    const apa = localCitation(meta, "apa");
+    expect(apa).toContain("Uddin, M. M.");
+    expect(apa).toContain("et al.");
+    expect(apa).toContain("(2022)");
+    expect(apa).toContain("https://doi.org/10.1038/x");
+  });
+
+  it("BibTeX and RIS are complete records", () => {
+    const bib = localCitation(meta, "bibtex");
+    expect(bib.startsWith(`@article{${citekey(meta)},`)).toBe(true);
+    expect(bib).toContain("and others");
+    expect(bib.trim().endsWith("}")).toBe(true);
+    const ris = localCitation(meta, "ris");
+    expect(ris.startsWith("TY  - JOUR")).toBe(true);
+    expect(ris.trim().endsWith("ER  -")).toBe(true);
   });
 });
