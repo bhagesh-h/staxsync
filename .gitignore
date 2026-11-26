@@ -3,6 +3,7 @@ todo.md
 
 # Reference clones of other projects (read-only, not part of this repository)
 ref/
+test/
 
 # Build and test output
 node_modules/
