@@ -1,6 +1,6 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { EventBus, PDFLinkService, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApp, useCommands } from "../app-context";
 import { colorLabel, DEFAULT_COLOR, HIGHLIGHT_COLORS, isHighlightColor, takesColor } from "../lib/colors";
 import type { Command } from "../lib/commands";
@@ -16,7 +16,7 @@ import { loadPdfjs, paperUrl } from "../pdf/pdfjs";
 import { anchorForRange, caretAt, clientToPdf, pdfUnitsPerPixel, rangeBetween, rangeToQuads, snapToWords, type Caret, type PageRef } from "../pdf/selection";
 import { AnnotationPopover } from "./AnnotationPopover";
 import { AnnotationSidebar } from "./AnnotationSidebar";
-import { ColorSwatches } from "./ColorSwatches";
+import { ColorMenu } from "./ColorMenu";
 import { OutlineTree, type OutlineNode } from "./OutlineTree";
 
 type Tool = "select" | "highlight" | "underline" | "area" | "note" | "pen" | "eraser";
@@ -32,6 +32,8 @@ const TOOLS: { tool: Tool; label: string; key: string }[] = [
 ];
 
 const INK_WIDTH = 1.6;
+/** Height of the selection menu's colour row, used to keep the menu above the selected text. */
+const SEL_ROW = 41;
 const FREEHAND_WIDTH = 12;
 /** pdf.js FindState values. */
 const FIND_NOT_FOUND = 1;
@@ -103,11 +105,14 @@ export function Reader({ paper, setLibrary }: Props) {
   const [invert, setInvert] = useState(() => loadPreference("invertPages") === "1");
   const [menuOpen, setMenuOpen] = useState(false);
   const [selMenu, setSelMenu] = useState<{ x: number; y: number } | null>(null);
+  const [selColorsOpen, setSelColorsOpen] = useState(false);
+  const [toolColorsAt, setToolColorsAt] = useState<{ x: number; y: number } | null>(null);
   const [popover, setPopover] = useState<{ id: string; x: number; y: number; focus: boolean } | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const [, setHistoryTick] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const selMenuRef = useRef<HTMLDivElement>(null);
   const viewerDivRef = useRef<HTMLDivElement>(null);
   const findInputRef = useRef<HTMLInputElement>(null);
   const pdfViewerRef = useRef<PDFViewer | null>(null);
@@ -246,7 +251,6 @@ export function Reader({ paper, setLibrary }: Props) {
     if (list.length === 0) return;
     commit([...annRef.current, ...list]);
     const first = list[0] as Annotation;
-    setSelected(first.id);
     announce(`${kindLabel(first.kind)} added on page ${pageLabel(first.page)}`);
   };
 
@@ -760,6 +764,7 @@ export function Reader({ paper, setLibrary }: Props) {
 
   const dismiss = () => {
     if (popover) return setPopover(null);
+    if (toolColorsAt) return setToolColorsAt(null);
     if (selMenu) return setSelMenu(null);
     if (menuOpen) return setMenuOpen(false);
     if (findOpen) return closeFind();
@@ -769,6 +774,15 @@ export function Reader({ paper, setLibrary }: Props) {
   };
 
   const hasSelection = () => !!currentSelectionRange();
+
+  /** Opens/closes the selection menu's colour row. Above the text (mouse), the menu grows upwards so the row never covers the selection. */
+  const showSelColors = (open: boolean) => {
+    if (open === selColorsOpen) return;
+    if (!window.matchMedia?.("(pointer: coarse)").matches) {
+      setSelMenu((m) => m && { ...m, y: Math.max(8, m.y + (open ? -SEL_ROW : SEL_ROW)) });
+    }
+    setSelColorsOpen(open);
+  };
 
   // ---- commands ---------------------------------------------------------------------
 
@@ -814,6 +828,18 @@ export function Reader({ paper, setLibrary }: Props) {
     const v = pdfViewerRef.current;
     if (v && status === "ready") v.spreadMode = twoUp ? 1 : 0;
   }, [twoUp, status]);
+
+  useEffect(() => {
+    if (!selMenu) setSelColorsOpen(false);
+  }, [selMenu]);
+
+  // Keep the selection menu inside the window, using its real width.
+  useLayoutEffect(() => {
+    const el = selMenuRef.current;
+    if (!el || !selMenu) return;
+    const maxLeft = window.innerWidth - el.offsetWidth - 8;
+    if (selMenu.x > maxLeft) setSelMenu({ ...selMenu, x: Math.max(8, maxLeft) });
+  }, [selMenu, selColorsOpen]);
 
   useEffect(() => savePreference("invertPages", invert ? "1" : "0"), [invert]);
   useEffect(() => savePreference("fingerDraws", fingerDraws ? "1" : "0"), [fingerDraws]);
@@ -916,14 +942,32 @@ export function Reader({ paper, setLibrary }: Props) {
             )}
           </header>
           <div className="bar toolstrip" role="toolbar" aria-label="Annotation tools">
-            {TOOLS.map((t) => (
-              <span key={t.tool} style={{ display: "inline-flex", alignItems: "center", flex: "none" }}>
-                <button className="btn" aria-pressed={tool === t.tool} title={`${t.label} (${t.key.toUpperCase()})`} onClick={() => selectTool(t.tool)}>
+            {TOOLS.map((t) =>
+              t.tool === "highlight" ? (
+                <button
+                  key={t.tool}
+                  className="btn"
+                  data-color-menu-toggle
+                  aria-pressed={tool === "highlight"}
+                  aria-haspopup="menu"
+                  aria-expanded={!!toolColorsAt}
+                  aria-label={`Highlight tool, ${colorLabel(color).toLowerCase()}`}
+                  title="Highlight (H) · colours 1–4"
+                  onClick={(e) => {
+                    selectTool("highlight");
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setToolColorsAt((open) => (open ? null : { x: r.left, y: r.bottom + 4 }));
+                  }}
+                >
+                  <span className={`dot c-${color}`} aria-hidden="true" />
+                  Highlight ▾
+                </button>
+              ) : (
+                <button key={t.tool} className="btn" aria-pressed={tool === t.tool} title={`${t.label} (${t.key.toUpperCase()})`} onClick={() => selectTool(t.tool)}>
                   {t.label}
                 </button>
-                {t.tool === "highlight" && <ColorSwatches value={color} label="Highlighter" onPick={setColor} />}
-              </span>
-            ))}
+              ),
+            )}
             <span className="sep" />
             <button className="btn" disabled={!canUndo} onClick={undo}>
               Undo
@@ -1033,11 +1077,17 @@ export function Reader({ paper, setLibrary }: Props) {
       </div>
 
       {selMenu && (
-        <div className="floating selection-menu" style={{ left: selMenu.x, top: selMenu.y }} role="toolbar" aria-label="Selected text" data-testid="selection-menu" onPointerDown={keepSelection} onMouseDown={keepSelection}>
-          <button className="btn" onClick={() => createFromSelection("highlight")}>
-            Highlight
+        <div ref={selMenuRef} className="floating selection-menu" style={{ left: selMenu.x, top: selMenu.y }} role="toolbar" aria-label="Selected text" data-testid="selection-menu" onPointerDown={keepSelection} onMouseDown={keepSelection}>
+          <button
+            className="btn"
+            data-color-menu-toggle
+            aria-haspopup="menu"
+            aria-expanded={selColorsOpen}
+            onClick={() => showSelColors(!selColorsOpen)}
+          >
+            <span className={`dot c-${color}`} aria-hidden="true" />
+            Highlight ▾
           </button>
-          <ColorSwatches value={color} label="Highlight" keepSelection onPick={pickColor} />
           <button className="btn" onClick={() => createFromSelection("underline")}>
             Underline
           </button>
@@ -1057,8 +1107,11 @@ export function Reader({ paper, setLibrary }: Props) {
           >
             Copy
           </button>
+          {selColorsOpen && <ColorMenu value={color} keepSelection row onPick={pickColor} onClose={() => showSelColors(false)} />}
         </div>
       )}
+
+      {toolColorsAt && !readMode && <ColorMenu value={color} at={toolColorsAt} onPick={setColor} onClose={() => setToolColorsAt(null)} />}
 
       {popover && popoverAnnotation && (
         <AnnotationPopover

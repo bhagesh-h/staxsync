@@ -33,13 +33,13 @@ To read your own PDFs instead of the examples, put them in `test/` (or set `PAPE
 **Reader**
 - Continuous pages, page jump, zoom, fit width, two pages side by side, outline, find with match count, and a distraction-free Read mode.
 - Tools: **Select · Highlight · Underline · Area · Note · Pen · Eraser**, with undo and redo.
-- Highlights come in **red, green, blue and yellow**: pick one next to the Highlight tool, in the selection menu, or with keys `1`–`4` (with text selected, the key highlights it in that colour).
-- Select text to get **Highlight · colours · Underline · Comment · Copy**. Click any annotation to comment, reply, change its colour, switch highlight/underline or delete it.
+- Highlights come in **red, green, blue and yellow**. Click **Highlight ▾** (in the tool strip or the selection menu) to choose a colour, or press `1`–`4` (with text selected, the key highlights it in that colour).
+- Select text to get **Highlight ▾ · Underline · Comment · Copy**. Click any annotation to comment, reply, change its colour, switch highlight/underline or delete it.
 - Notes appear on the page as chat bubbles; a bubble with dots has a comment.
 - **Stylus** (Apple Pencil, S Pen, Surface Pen, Wacom): a pen drag with Highlight or Underline snaps to whole words, the Pen draws pressure-sensitive ink, and fingers keep scrolling. Turn on "Fingers draw" in the ⋯ menu to draw without a stylus.
 - Annotations panel (filter, search, jump to any annotation), a Markdown note per paper, and **Export Markdown**.
 - Remembers where you stopped reading in each paper.
-- Light and dark paper themes with a subtle grain, the Ubuntu font throughout, orange navigation buttons, no animations. Works on phones, tablets and desktops.
+- Light and dark paper themes with a subtle grain, the Ubuntu font at one size throughout (only the StaxSync wordmark is larger), orange navigation buttons, no heavy black boxes, no animations. Works on phones, tablets and desktops.
 - The DOI shows next to the title in the reader (on wide screens) and links to doi.org.
 
 **Keyboard**: `H` highlight, `1`–`4` red/green/blue/yellow highlight, `U` underline, `C` comment, `V` `A` `N` `P` `E` tools, `Ctrl/⌘ Z` undo, `Ctrl/⌘ Shift Z` redo, `Ctrl/⌘ F` find, `F` read mode, `S` annotations, `O` outline, `+` `−` `0` zoom, `Delete` remove the selected annotation, `Esc` close. `Ctrl/⌘ K` lists every command.

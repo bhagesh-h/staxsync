@@ -20,8 +20,11 @@
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.16 0 0 0 0 0.1 0 0 0 .11 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --font: "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Ubuntu Mono", ui-monospace, Menlo, Consolas, monospace;
-  --size-ui: 14px;
-  --size-meta: 12px;
+  /* One text size for the whole interface (hierarchy comes from weight and colour). */
+  --size-ui: 15px;
+  --size-meta: var(--size-ui);
+  /* The StaxSync wordmark is the only larger text. */
+  --size-brand: 28px;
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -87,13 +90,14 @@ textarea {
   color: inherit;
 }
 
+/* Selected text anywhere in the interface: a light orange tint, text keeps its colour. */
 ::selection {
-  background: var(--fg);
-  color: var(--bg);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+/* Keyboard focus: a thin orange ring, never a heavy black box. */
 :focus-visible {
-  outline: 2px solid var(--fg);
+  outline: 1px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -130,13 +134,15 @@ textarea {
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--muted);
+  background-color: var(--mark);
 }
 
+/* "On" state: a light wash and an orange underline instead of a black block. */
 .btn[aria-pressed="true"],
 .btn.is-active {
-  background: var(--fg);
-  color: var(--bg);
+  background-color: var(--mark);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 500;
 }
 
 .btn:disabled {
@@ -150,14 +156,10 @@ textarea {
   font-weight: 500;
 }
 
-.btn-nav:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
 .btn-nav[aria-pressed="true"],
 .btn-nav.is-active {
-  background: var(--accent);
-  color: var(--on-accent);
+  background-color: var(--mark);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .btn-nav:disabled {
@@ -166,7 +168,7 @@ textarea {
 
 .doi {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--size-ui);
   color: var(--accent);
   text-decoration: none;
 }
@@ -213,8 +215,7 @@ textarea {
 }
 
 .swatch[aria-pressed="true"] {
-  outline: 2px solid var(--fg);
-  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
 }
 
 .dot {
@@ -240,8 +241,14 @@ textarea {
   padding: 0 var(--s2);
   border: 1px solid var(--muted);
   background: var(--field);
-  /* 16px stops iOS from zooming into focused fields. */
-  font-size: max(16px, var(--size-ui));
+  /* Same size as all other text; on touch screens it's 16px, which also stops iOS zooming in. */
+  font-size: var(--size-ui);
+}
+
+.field:focus,
+.field:focus-visible {
+  outline: none;
+  border-color: var(--accent);
 }
 
 textarea.field {
@@ -297,8 +304,11 @@ textarea.field {
 }
 
 .brand {
-  font-weight: 600;
-  margin-right: var(--s2);
+  font-size: var(--size-brand);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  margin-right: var(--s3);
 }
 
 .library {
@@ -372,8 +382,8 @@ textarea.field {
 }
 
 .paper-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--size-ui);
+  font-weight: 700;
 }
 
 .paper-line {
@@ -500,9 +510,19 @@ textarea.field {
   filter: invert(1);
 }
 
-/* Keep pdf.js's own selection and find colours monochrome. */
+/*
+ * pdf.js draws invisible text over the page image for selection. Its selected text must stay
+ * transparent (a visible colour shows a second, slightly offset copy of the text), and the
+ * selection tint stays light so the words underneath remain readable.
+ */
 .pdfViewer .textLayer ::selection {
-  background: rgb(0 0 0 / 0.3) !important;
+  color: transparent !important;
+  background: rgb(0 0 0 / 0.14) !important;
+}
+
+.pdfViewer .textLayer,
+.pdfViewer .textLayer :is(span, br) {
+  color: transparent !important;
 }
 
 .pdfViewer .textLayer .highlight {
@@ -574,8 +594,9 @@ textarea.field {
 }
 
 .ann-item[aria-current="true"] {
-  outline: 2px solid var(--fg);
-  outline-offset: -2px;
+  background-color: var(--mark);
+  box-shadow: inset 2px 0 0 var(--accent);
+  padding-left: var(--s2);
 }
 
 .ann-quote {
@@ -598,11 +619,53 @@ textarea.field {
   z-index: 20;
   background-color: var(--bg);
   background-image: var(--grain);
-  border: 1px solid var(--fg);
+  border: 1px solid var(--muted);
 }
 
 .selection-menu {
   display: flex;
+  flex-wrap: wrap;
+  max-width: calc(100vw - 16px);
+}
+
+.selection-menu .color-menu {
+  flex-basis: 100%;
+  border-top: 1px solid var(--muted);
+}
+
+.color-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: var(--s1);
+  z-index: 25;
+}
+
+.color-option {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  text-align: left;
+}
+
+.color-option .meta {
+  margin-left: auto;
+}
+
+.color-option[aria-checked="true"] {
+  font-weight: 700;
+}
+
+.color-menu.row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.reader > .bar .meta,
+.reader > .bar .page-input {
+  flex: none;
+  white-space: nowrap;
 }
 
 .popover {
@@ -683,7 +746,7 @@ textarea.field {
     width: auto;
     max-height: 60%;
     border: none;
-    border-top: 1px solid var(--fg);
+    border-top: 1px solid var(--muted);
   }
   /* Phones: each bar is one row that scrolls sideways instead of wrapping. */
   .reader > .bar {
@@ -772,10 +835,13 @@ textarea.field {
   stroke: none;
 }
 
+/* The annotation open in the popover: a light dashed frame, not a heavy box. */
 .sx-selection {
   fill: none;
   stroke: var(--paper-ink);
-  stroke-width: 1.5;
+  stroke-width: 0.6;
+  stroke-dasharray: 2 2;
+  opacity: 0.6;
 }
 
 .sx-preview .sx-hl,

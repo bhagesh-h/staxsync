@@ -51,6 +51,20 @@ async function drag(page: Page, from: [number, number], to: [number, number]) {
   await page.mouse.up();
 }
 
+/** Computed font sizes of all interface text (not the PDF pages), plus the wordmark's size. */
+async function textSizes(page: Page) {
+  return page.evaluate(() => {
+    const sizes = new Set<string>();
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>("#root *"))) {
+      if (el.closest(".brand, .pdfViewer")) continue;
+      const hasText = Array.from(el.childNodes).some((n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").trim());
+      if (hasText || el.matches("input, select, textarea")) sizes.add(getComputedStyle(el).fontSize);
+    }
+    const brand = document.querySelector(".brand");
+    return { ui: [...sizes], brand: brand ? getComputedStyle(brand).fontSize : null };
+  });
+}
+
 const overlay = (page: Page, kind: string) => page.locator(`.page[data-page-number="1"] .sx-overlay [data-kind="${kind}"]`);
 
 test("library lists the example papers with their metadata and DOI, in Ubuntu", async ({ page }) => {
@@ -65,6 +79,11 @@ test("library lists the example papers with their metadata and DOI, in Ubuntu", 
   });
   expect(ubuntu.family).toMatch(/^"?Ubuntu"?/);
   expect(ubuntu.loaded).toBe(true);
+
+  // One text size everywhere; only the StaxSync wordmark is bigger.
+  const sizes = await textSizes(page);
+  expect(sizes.ui).toHaveLength(1);
+  expect(parseFloat(sizes.brand!)).toBeGreaterThan(parseFloat(sizes.ui[0]!) * 1.5);
 });
 
 test("papers take several tags and the tag filter includes, excludes and matches all/any", async ({ page }) => {
@@ -107,6 +126,8 @@ test("highlight a selection, comment on it, and find it again after reload", asy
   await page.keyboard.press("h");
   await expect(overlay(page, "highlight")).toHaveCount(1);
   await expect(overlay(page, "highlight")).toHaveAttribute("data-color", "yellow");
+  // A new highlight is not framed by a selection box.
+  await expect(page.locator(".sx-overlay .sx-selection")).toHaveCount(0);
   await expect(page.getByTestId("reader-doi")).toHaveText("doi:10.1038/s41467-022-33093-3");
 
   // Clicking the highlight opens it for a comment.
@@ -127,6 +148,20 @@ test("highlight a selection, comment on it, and find it again after reload", asy
   await expect(item).toContainText("Blue highlight");
   await expect(item).toContainText(text.replace(/\s+/g, " ").trim().slice(0, 15));
   await expect(item).toContainText("Key definition");
+});
+
+test("selected text stays a light tint: the text layer never shows a second copy of the words", async ({ page }) => {
+  await openPaper(page);
+  await selectTextOnFirstPage(page);
+  const colours = await page.evaluate(() => {
+    const span = window.getSelection()!.getRangeAt(0).startContainer.parentElement!;
+    const sel = getComputedStyle(span, "::selection");
+    return { text: getComputedStyle(span).color, selected: sel.color };
+  });
+  const invisible = /rgba\(0, 0, 0, 0\)|transparent/;
+  expect(colours.text).toMatch(invisible);
+  // Browsers that report ::selection styles must report it transparent too.
+  if (colours.selected) expect(colours.selected).toMatch(invisible);
 });
 
 test("underline from the selection menu, then undo and redo", async ({ page }) => {
@@ -164,7 +199,7 @@ test("area, note, pen and eraser tools", async ({ page }) => {
   await expect(overlay(page, "note")).toHaveCount(1);
   // A note is a chat bubble (a path with a tail), not a box.
   await expect(overlay(page, "note").locator("path.sx-bubble")).toHaveCount(1);
-  await expect(overlay(page, "note").locator("rect")).toHaveCount(1); // only the selection outline
+  await expect(overlay(page, "note").locator("rect")).toHaveCount(0); // no box, and no selection frame
   await expect(page.getByTestId("annotation-popover")).toBeVisible();
 });
 
@@ -177,8 +212,14 @@ test("number keys pick RGBY colours and highlight the selection in them", async 
     await expect(overlay(page, "highlight").nth(i)).toHaveAttribute("data-color", colour);
   }
   // The highlighter keeps the last colour picked.
-  await expect(page.getByRole("button", { name: "Highlighter yellow" })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Highlighter green" }).click();
+  // Colours stay hidden until Highlight is clicked; then they drop down, with the current one checked.
+  const colours_ = page.getByRole("menu", { name: "Highlight colour" });
+  await expect(colours_).toHaveCount(0);
+  await page.getByRole("button", { name: /^Highlight tool/ }).click();
+  await expect(colours_.getByRole("menuitemradio", { name: /Yellow/ })).toHaveAttribute("aria-checked", "true");
+  await colours_.getByRole("menuitemradio", { name: /Green/ }).click();
+  await expect(colours_).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Highlight tool/ })).toHaveAccessibleName("Highlight tool, green");
   await selectTextOnFirstPage(page);
   await page.keyboard.press("h");
   await expect(overlay(page, "highlight").nth(4)).toHaveAttribute("data-color", "green");
@@ -189,11 +230,13 @@ test("find in document reports matches", async ({ page }) => {
   await page.getByRole("button", { name: "Find", exact: true }).click();
   await page.getByRole("searchbox", { name: "Find in document" }).fill("methylation");
   await expect(page.getByTestId("find-info")).toHaveText(/\d+ of \d+/);
+  expect((await textSizes(page)).ui).toHaveLength(1);
 });
 
 test("a stylus drag with the Highlight tool snaps to the words under it", async ({ page }) => {
   await openPaper(page);
-  await page.getByRole("button", { name: "Highlight", exact: true }).click();
+  await page.getByRole("button", { name: /^Highlight tool/ }).click();
+  await page.getByRole("menuitemradio", { name: /Yellow/ }).click();
   // Browsers can't be driven with a real pen in CI, so send the pen pointer events a stylus produces.
   const snapped = await page.evaluate(() => {
     const spans = Array.from(document.querySelectorAll<HTMLElement>('.page[data-page-number="1"] .textLayer span'));
