@@ -12,7 +12,7 @@ async function openLibrary(page: Page) {
 async function openPaper(page: Page) {
   await openLibrary(page);
   await page.getByRole("link", { name: CHIP_PAPER }).click();
-  await expect(page.getByTestId("page-count")).toHaveText("of 16");
+  await expect(page.getByTestId("page-rail").getByRole("button")).toHaveCount(16);
   await expect(page.locator('.page[data-page-number="1"] canvas')).toBeVisible();
   await expect(page.locator('.page[data-page-number="1"] .textLayer span').first()).toBeAttached();
 }
@@ -303,7 +303,7 @@ test("the library has no sidebar, every button is orange and labels carry no dec
   expect(report.text).not.toMatch(/[←→▾⋯×‹›✓#−]/);
 
   await page.getByRole("link", { name: CHIP_PAPER }).click();
-  await expect(page.getByTestId("page-count")).toHaveText("of 16");
+  await expect(page.getByTestId("page-rail").getByRole("button")).toHaveCount(16);
   const readerText = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("button, a.btn")).map((b) => b.innerText).join(" "));
   expect(readerText).not.toMatch(/[←→▾⋯×‹›✓#−]/);
   const libraryLink = page.getByRole("link", { name: "Library", exact: true });
@@ -311,7 +311,7 @@ test("the library has no sidebar, every button is orange and labels carry no dec
   expect(await libraryLink.evaluate((el) => getComputedStyle(el).color)).toBe(await highlight.evaluate((el) => getComputedStyle(el).color));
 });
 
-test("the reader scrolls in one place with no scrollbar; the dial and W/A/S/D or arrows move through pages", async ({ page }) => {
+test("the reader scrolls in one place with no scrollbar; the page rail and W/A/S/D or arrows move through pages", async ({ page }) => {
   await openPaper(page);
   const layout = await page.evaluate(() => {
     const v = document.querySelector<HTMLElement>(".viewer-scroll")!;
@@ -320,13 +320,13 @@ test("the reader scrolls in one place with no scrollbar; the dial and W/A/S/D or
   expect(layout.pageScrolls).toBe(false);
   expect(layout.gutter).toBe(0);
 
-  const dial = page.getByTestId("page-dial");
-  await expect(dial).toHaveAttribute("aria-valuenow", "1");
-  await page.locator("body").click({ position: { x: 5, y: 5 } }).catch(() => {});
+  const rail = page.getByTestId("page-rail");
+  const current = rail.locator('[aria-current="page"]');
+  await expect(current).toHaveText("1");
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   for (const [key, expected] of [["d", "2"], ["ArrowRight", "3"], ["a", "2"], ["ArrowLeft", "1"]] as const) {
     await page.keyboard.press(key);
-    await expect(dial).toHaveAttribute("aria-valuenow", expected);
+    await expect(current).toHaveText(expected);
   }
   const top = () => page.locator(".viewer-scroll").evaluate((el) => el.scrollTop);
   const before = await top();
@@ -337,26 +337,19 @@ test("the reader scrolls in one place with no scrollbar; the dial and W/A/S/D or
   await page.keyboard.press("w");
   expect(await top()).toBeLessThan(after);
 
-  // Turning the dial clockwise a quarter turn clicks forward several pages.
-  const box = (await dial.boundingBox())!;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  const r = box.width * 0.4;
-  await page.mouse.move(cx, cy - r);
-  await page.mouse.down();
-  for (let deg = 0; deg <= 100; deg += 5) {
-    const a = (deg * Math.PI) / 180;
-    await page.mouse.move(cx + Math.sin(a) * r, cy - Math.cos(a) * r);
-  }
-  await page.mouse.up();
-  expect(Number(await dial.getAttribute("aria-valuenow"))).toBeGreaterThan(2);
+  // The current page number is orange; the others take the rail's ink colour.
+  const colours = await rail.evaluate((nav) => ({
+    rail: getComputedStyle(nav).color,
+    current: getComputedStyle(nav.querySelector('[aria-current="page"]')!).color,
+    other: getComputedStyle(nav.querySelector('button:not([aria-current])')!).color,
+  }));
+  expect(colours.other).toBe(colours.rail);
+  expect(colours.current).not.toBe(colours.rail);
 
-  // A click without turning opens the page field.
-  await dial.click();
-  const field = page.getByRole("textbox", { name: "Page" });
-  await field.fill("10");
-  await field.press("Enter");
-  await expect(dial).toHaveAttribute("aria-valuenow", "10");
+  // Click a number to jump to that page.
+  await rail.getByRole("button", { name: "Page 10", exact: true }).click();
+  await expect(current).toHaveText("10");
+  await expect(rail.getByRole("button", { name: "Page 10", exact: true })).toBeInViewport();
 });
 
 test("cite the open paper from doi.org in a style or as BibTeX", async ({ page }) => {

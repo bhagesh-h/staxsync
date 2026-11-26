@@ -17,7 +17,7 @@ import { anchorForRange, caretAt, clientToPdf, pdfUnitsPerPixel, rangeBetween, r
 import { AnnotationPopover } from "./AnnotationPopover";
 import { AnnotationSidebar } from "./AnnotationSidebar";
 import { CitePanel } from "./CitePanel";
-import { PageDial } from "./PageDial";
+import { PageRail } from "./PageRail";
 import { ColorMenu } from "./ColorMenu";
 import { OutlineTree, type OutlineNode } from "./OutlineTree";
 
@@ -1010,6 +1010,7 @@ export function Reader({ paper, setLibrary }: Props) {
       )}
 
       <div className="reader-body">
+        {status === "ready" && numPages > 0 && <PageRail page={pageNumber} count={numPages} label={pageLabel} onPick={goToPage} />}
         {leftOpen && !readMode && (
           <aside className="panel left" aria-label="Outline">
             <div className="bar">
@@ -1039,7 +1040,6 @@ export function Reader({ paper, setLibrary }: Props) {
           <div ref={scrollRef} className={`viewer-scroll ${toolClass}`} data-testid="viewer" data-tool={tool} aria-label="Document" tabIndex={-1}>
             <div ref={viewerDivRef} className="pdfViewer" />
           </div>
-          {status === "ready" && numPages > 0 && <PageDial page={pageNumber} count={numPages} label={pageLabel} onChange={goToPage} />}
           {status === "loading" && <p className="status">Opening…</p>}
           {status === "error" && <p className="status">Couldn't open this PDF: {error}</p>}
           {readMode && (
