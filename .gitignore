@@ -1,0 +1,19 @@
+# Planning notes (local only)
+todo.md
+
+# Reference clones of other projects (read-only, not part of this repository)
+ref/
+
+# Build and test output
+node_modules/
+apps/web/dist/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+apps/web/.vite/
+*.log
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store

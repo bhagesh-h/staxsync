@@ -1,0 +1,5 @@
+# Only apps/web/package.json and package-lock.json are copied into the image.
+*
+!apps/web/package.json
+!apps/web/package-lock.json
+todo.md

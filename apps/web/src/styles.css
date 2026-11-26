@@ -1,0 +1,679 @@
+/*
+ * StaxSync design tokens (todo.md §0.1): two colours, two greys, no motion.
+ * Screens use these tokens only. Paper tokens are fixed because PDF pages are white paper.
+ */
+:root {
+  --fg: #000;
+  --bg: #fff;
+  --muted: #5f5f5f;
+  --mark: #e6e6e6;
+  --paper-ink: #000;
+  --paper-mark: #c4c4c4;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --size-ui: 14px;
+  --size-meta: 12px;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --control: 32px;
+  --bar: 44px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --fg: #fff;
+  --bg: #000;
+  --muted: #a8a8a8;
+  --mark: #2e2e2e;
+  color-scheme: dark;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --control: 44px;
+    --size-ui: 16px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: var(--size-ui) / 1.4 var(--font);
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.meta {
+  font-size: var(--size-meta);
+  color: var(--muted);
+}
+
+/* Controls ---------------------------------------------------------------------------- */
+
+.btn {
+  min-height: var(--control);
+  min-width: var(--control);
+  padding: 0 var(--s2);
+  border: 1px solid transparent;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.btn[aria-pressed="true"],
+.btn.is-active {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.btn:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.btn-outline {
+  border-color: var(--muted);
+}
+
+.field {
+  min-height: var(--control);
+  padding: 0 var(--s2);
+  border: 1px solid var(--muted);
+  background: var(--bg);
+  /* 16px stops iOS from zooming into focused fields. */
+  font-size: max(16px, var(--size-ui));
+}
+
+textarea.field {
+  width: 100%;
+  min-height: 72px;
+  padding: var(--s2);
+  resize: vertical;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: var(--bar);
+  padding: 0 var(--s2);
+  padding-left: max(var(--s2), env(safe-area-inset-left));
+  padding-right: max(var(--s2), env(safe-area-inset-right));
+  border-bottom: 1px solid var(--muted);
+  flex-wrap: wrap;
+}
+
+.bar .spacer {
+  flex: 1;
+}
+
+.sep {
+  width: 1px;
+  align-self: stretch;
+  margin: var(--s2) var(--s1);
+  background: var(--muted);
+}
+
+/* Library ----------------------------------------------------------------------------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.brand {
+  font-weight: 600;
+  margin-right: var(--s2);
+}
+
+.library {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.rail {
+  width: 240px;
+  flex: none;
+  padding: var(--s3);
+  border-right: 1px solid var(--muted);
+  overflow: auto;
+}
+
+.rail h2 {
+  font-size: var(--size-meta);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: var(--s4) 0 var(--s1);
+}
+
+.rail h2:first-child {
+  margin-top: 0;
+}
+
+.rail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.rail-row .btn {
+  flex: 1;
+  text-align: left;
+}
+
+.rail-row .count {
+  font-size: var(--size-meta);
+  color: var(--muted);
+  min-width: 2ch;
+  text-align: right;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--muted);
+}
+
+.papers {
+  flex: 1;
+  overflow: auto;
+  padding: 0 var(--s4) var(--s5);
+}
+
+.filter-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--bar);
+  border-bottom: 1px solid var(--muted);
+  font-size: var(--size-meta);
+}
+
+.paper-row {
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--muted);
+}
+
+.paper-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.paper-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin-top: var(--s1);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--size-meta);
+}
+
+.tag .btn {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
+}
+
+.tag-input {
+  width: 12ch;
+  min-height: 28px;
+}
+
+.empty {
+  padding: var(--s5) 0;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .library {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .rail {
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--muted);
+  }
+  .papers {
+    overflow: visible;
+  }
+}
+
+/* Reader ------------------------------------------------------------------------------ */
+
+.reader {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.reader-title {
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-input {
+  width: 5ch;
+  text-align: right;
+}
+
+.toolstrip {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+.reader-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.viewer-host {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.viewer-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: var(--bg);
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+.viewer-scroll.tool-draw .textLayer {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.viewer-scroll.tool-draw,
+.viewer-scroll.tool-draw .textLayer {
+  cursor: crosshair;
+}
+
+.viewer-scroll.tool-note .textLayer {
+  cursor: copy;
+}
+
+.pdfViewer.removePageBorders .page {
+  margin: 0 auto 1px;
+  border: none;
+  box-shadow: none;
+  outline: 1px solid var(--muted);
+}
+
+:root[data-theme="dark"] .invert-pages .pdfViewer .page {
+  filter: invert(1);
+}
+
+/* Keep pdf.js's own selection and find colours monochrome. */
+.pdfViewer .textLayer ::selection {
+  background: rgb(0 0 0 / 0.3) !important;
+}
+
+.pdfViewer .textLayer .highlight {
+  background-color: rgb(0 0 0 / 0.16) !important;
+  outline: 1px solid rgb(0 0 0 / 0.6);
+}
+
+.pdfViewer .textLayer .highlight.selected {
+  background-color: rgb(0 0 0 / 0.38) !important;
+}
+
+.toolstrip .btn,
+.reader > .bar .btn {
+  flex: none;
+}
+
+.panel {
+  width: 320px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--muted);
+  background: var(--bg);
+  min-height: 0;
+}
+
+.panel.left {
+  border-left: none;
+  border-right: 1px solid var(--muted);
+  width: 280px;
+}
+
+.panel-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--s2) var(--s3);
+}
+
+.panel .bar {
+  flex-wrap: nowrap;
+}
+
+.outline-list,
+.outline-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.outline-list ul {
+  padding-left: var(--s3);
+}
+
+.outline-list .link {
+  display: block;
+  padding: var(--s1) 0;
+}
+
+.ann-item {
+  display: block;
+  width: 100%;
+  padding: var(--s2) 0;
+  border: none;
+  border-bottom: 1px solid var(--muted);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ann-item[aria-current="true"] {
+  outline: 2px solid var(--fg);
+  outline-offset: -2px;
+}
+
+.ann-quote {
+  display: block;
+  margin-top: 2px;
+  border-left: 3px solid var(--mark);
+  padding-left: var(--s2);
+}
+
+.findbar {
+  border-bottom: 1px solid var(--muted);
+}
+
+.findbar .field {
+  width: min(320px, 50vw);
+}
+
+.floating {
+  position: fixed;
+  z-index: 20;
+  background: var(--bg);
+  border: 1px solid var(--fg);
+}
+
+.selection-menu {
+  display: flex;
+}
+
+.popover {
+  width: min(340px, calc(100vw - 16px));
+  padding: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.popover .row {
+  display: flex;
+  gap: var(--s1);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.popover blockquote {
+  margin: 0;
+  padding-left: var(--s2);
+  border-left: 3px solid var(--mark);
+  max-height: 6em;
+  overflow: auto;
+}
+
+.reply {
+  font-size: var(--size-meta);
+  border-left: 1px solid var(--muted);
+  padding-left: var(--s2);
+}
+
+.read-mode-counter {
+  position: absolute;
+  right: var(--s3);
+  bottom: var(--s3);
+  z-index: 5;
+  font-size: var(--size-meta);
+  color: var(--muted);
+  background: var(--bg);
+  padding: 2px var(--s1);
+}
+
+.read-mode-exit {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s3);
+  z-index: 5;
+  color: var(--muted);
+}
+
+.menu {
+  position: absolute;
+  right: var(--s2);
+  top: calc(var(--bar) - 4px);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: var(--s1);
+}
+
+.menu .btn {
+  text-align: left;
+}
+
+.status {
+  padding: var(--s5);
+}
+
+@media (max-width: 720px) {
+  .panel,
+  .panel.left {
+    position: absolute;
+    z-index: 10;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 60%;
+    border: none;
+    border-top: 1px solid var(--fg);
+  }
+  /* Phones: each bar is one row that scrolls sideways instead of wrapping. */
+  .reader > .bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .reader-title,
+  .reader > .bar .spacer {
+    display: none;
+  }
+}
+
+/* Annotation overlay inside pdf.js pages ---------------------------------------------- */
+
+.sx-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Multiply: grey highlights darken the page but keep black text black. */
+  mix-blend-mode: multiply;
+}
+
+.sx-overlay svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sx-hl {
+  fill: var(--paper-mark);
+}
+
+.sx-ul {
+  stroke: var(--paper-ink);
+}
+
+.sx-area {
+  fill: none;
+  stroke: var(--paper-ink);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.sx-note {
+  fill: #fff;
+  stroke: var(--paper-ink);
+  stroke-width: 1.2;
+}
+
+.sx-ink {
+  fill: var(--paper-ink);
+}
+
+.sx-comment-mark {
+  fill: var(--paper-ink);
+}
+
+.sx-selection {
+  fill: none;
+  stroke: var(--paper-ink);
+  stroke-width: 1.5;
+}
+
+.sx-preview .sx-hl,
+.sx-preview .sx-ink {
+  opacity: 0.7;
+}
+
+/* Command palette --------------------------------------------------------------------- */
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+.palette {
+  position: fixed;
+  z-index: 31;
+  top: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 16px));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.palette .field {
+  border: none;
+  border-bottom: 1px solid var(--muted);
+  width: 100%;
+}
+
+.palette ul {
+  list-style: none;
+  margin: 0;
+  padding: var(--s1);
+  overflow: auto;
+}
+
+.palette li button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+}
